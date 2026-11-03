@@ -84,11 +84,11 @@ export default function Layout({ children }) {
 
       {/* ── SIDEBAR ── */}
       <aside
-        className="fixed inset-y-0 left-0 z-30 flex flex-col transition-all duration-200 ease-in-out -translate-x-full lg:translate-x-0"
+        className="fixed inset-y-0 left-0 z-30 flex flex-col transition-all duration-200 ease-in-out lg:!translate-x-0"
         style={{
           background: '#1C1C1C',
           width: expanded ? '220px' : '64px',
-          transform: sidebarOpen ? 'translateX(0)' : undefined,
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
