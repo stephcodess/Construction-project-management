@@ -5,6 +5,7 @@ import { computeVAT } from '../lib/taxRules'
 import { exportJournalPDF } from '../lib/pdf'
 import { format, endOfMonth, subMonths, startOfMonth } from 'date-fns'
 import { Plus, Download, Search, X, TrendingUp, TrendingDown, DollarSign, Paperclip, FileText, Pencil, Trash2 } from 'lucide-react'
+import DeleteConfirmModal from '../components/DeleteConfirmModal'
 
 const CATEGORIES = [
   'Contract Revenue', 'Labour Cost', 'Materials', 'Equipment Hire',
@@ -683,42 +684,24 @@ function OverviewTab({ profile }) {
                   </td>
                   <td className="px-5 py-3.5">
                     {(profile?.role === 'admin' || profile?.role === 'accountant') && (
-                      confirmDelete === e.id ? (
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          <span className="text-xs text-gray-500">Confirm?</span>
-                          <button type="button" onClick={() => handleDelete(e.id)}
-                            className="text-xs font-bold px-2 py-1 rounded-lg text-white transition"
-                            style={{ background: '#CC0000' }}
-                            onMouseEnter={ev => ev.currentTarget.style.background = '#AA0000'}
-                            onMouseLeave={ev => ev.currentTarget.style.background = '#CC0000'}>
-                            Yes
-                          </button>
-                          <button type="button" onClick={() => setConfirmDelete(null)}
-                            className="text-xs font-bold px-2 py-1 rounded-lg border-2 hover:bg-gray-50 transition"
-                            style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
-                            No
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <button type="button" onClick={() => setEditingEntry(e)}
-                            title="Edit entry"
-                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors text-gray-400 hover:text-gray-700"
-                            style={{ background: '#F5F5F5' }}
-                            onMouseEnter={ev => ev.currentTarget.style.background = '#E5E5E5'}
-                            onMouseLeave={ev => ev.currentTarget.style.background = '#F5F5F5'}>
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button type="button" onClick={() => setConfirmDelete(e.id)}
-                            title="Delete entry"
-                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
-                            style={{ background: '#FFF0F0' }}
-                            onMouseEnter={ev => ev.currentTarget.style.background = '#FFD7D7'}
-                            onMouseLeave={ev => ev.currentTarget.style.background = '#FFF0F0'}>
-                            <Trash2 className="w-3.5 h-3.5" style={{ color: '#CC0000' }} />
-                          </button>
-                        </div>
-                      )
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => setEditingEntry(e)}
+                          title="Edit entry"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors text-gray-400 hover:text-gray-700"
+                          style={{ background: '#F5F5F5' }}
+                          onMouseEnter={ev => ev.currentTarget.style.background = '#E5E5E5'}
+                          onMouseLeave={ev => ev.currentTarget.style.background = '#F5F5F5'}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => setConfirmDelete(e.id)}
+                          title="Delete entry"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
+                          style={{ background: '#FFF0F0' }}
+                          onMouseEnter={ev => ev.currentTarget.style.background = '#FFD7D7'}
+                          onMouseLeave={ev => ev.currentTarget.style.background = '#FFF0F0'}>
+                          <Trash2 className="w-3.5 h-3.5" style={{ color: '#CC0000' }} />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -753,6 +736,14 @@ function OverviewTab({ profile }) {
         <EditEntryModal entry={editingEntry} projects={projects}
           onClose={() => setEditingEntry(null)}
           onSaved={() => { setEditingEntry(null); loadEntries(); loadMonthlyData() }} />
+      )}
+      {confirmDelete && (
+        <DeleteConfirmModal
+          title="Delete Journal Entry?"
+          description="This will permanently remove this transaction record and cannot be undone."
+          onConfirm={() => handleDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
       )}
     </div>
   )

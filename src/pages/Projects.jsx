@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { Plus, X, Check, FolderOpen, Search, Upload, FileText, Pencil, Trash2, ChevronRight, ArrowRight, Receipt } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
 import { exportInvoicePDF, exportProjectPLPDF } from '../lib/pdf'
+import DeleteConfirmModal from '../components/DeleteConfirmModal'
 
 // ── SVG Sparkline ────────────────────────────────────────────
 function Sparkline({ data, color = '#CC0000', width = 72, height = 28 }) {
@@ -1156,9 +1157,13 @@ export default function Projects() {
   }
 
   async function handleDelete(id) {
-    await supabase.from('projects').delete().eq('id', id)
+    const { error } = await supabase.from('projects').delete().eq('id', id)
+    if (error) {
+      alert(`Delete failed: ${error.message}`)
+      setConfirmDelete(null)
+      return
+    }
     setConfirmDelete(null)
-    // Close drawer if deleted project was selected
     if (selectedProject?.id === id) setSelectedProject(null)
     loadProjects()
   }
@@ -1342,40 +1347,20 @@ export default function Projects() {
                     <td className="px-5 py-3.5"><StatusBadge status={p.status} /></td>
                     {isAdmin && (
                       <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
-                        {isConfirming ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-gray-500 font-semibold mr-1">Confirm?</span>
-                            <button
-                              onClick={() => handleDelete(p.id)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-white transition"
-                              style={{ background: '#CC0000' }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#AA0000'}
-                              onMouseLeave={e => e.currentTarget.style.background = '#CC0000'}>
-                              Yes
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(null)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-bold border transition"
-                              style={{ borderColor: '#E5E5E5', color: '#555' }}>
-                              No
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => setEditingProject(p)}
-                              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition"
-                              title="Edit project">
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(p.id)}
-                              className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition"
-                              title="Delete project">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setEditingProject(p)}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition"
+                            title="Edit project">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete(p.id)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition"
+                            title="Delete project">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -1402,6 +1387,15 @@ export default function Projects() {
 
       {showWizard && (
         <AddProjectWizard onClose={() => setShowWizard(false)} onSaved={loadProjects} />
+      )}
+
+      {confirmDelete && (
+        <DeleteConfirmModal
+          title="Delete Project?"
+          description="This will permanently delete the project and cannot be undone. Journal entries linked to this project will remain."
+          onConfirm={() => handleDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
       )}
     </div>
   )
