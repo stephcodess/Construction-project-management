@@ -78,7 +78,7 @@ function VATTab() {
             onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
           <button onClick={() => exportVATPDF(entries, month)}
             className="flex items-center gap-2 border-2 px-3 py-2 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
-            style={{ borderColor: '#E5E5E5', color: '#1C2340' }}>
+            style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
             <Download className="w-4 h-4" /> PDF
           </button>
         </div>
@@ -86,14 +86,14 @@ function VATTab() {
 
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-2xl p-5" style={{ background: '#1C2340' }}>
+        <div className="rounded-2xl p-5" style={{ background: '#1C1C1C' }}>
           <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-1">Output VAT (Sales)</p>
           <p className="text-3xl font-black text-white">₦{outputVAT.toLocaleString()}</p>
           <p className="text-xs text-white/40 mt-2">{entries.filter(e => e.type === 'receipt').length} taxable receipts</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm p-5">
           <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Input VAT (Purchases)</p>
-          <p className="text-3xl font-black" style={{ color: '#1C2340' }}>₦{inputVAT.toLocaleString()}</p>
+          <p className="text-3xl font-black" style={{ color: '#1C1C1C' }}>₦{inputVAT.toLocaleString()}</p>
           <p className="text-xs text-gray-300 mt-2">{entries.filter(e => e.type === 'payment').length} taxable payments</p>
         </div>
         <div className="rounded-2xl p-5 flex flex-col" style={{ background: '#CC0000' }}>
@@ -145,7 +145,7 @@ function VATTab() {
                     <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap">{format(new Date(e.date), 'dd MMM yyyy')}</td>
                     <td className="px-5 py-3.5">
                       <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase text-white"
-                        style={{ background: e.type === 'receipt' ? '#CC0000' : '#1C2340' }}>
+                        style={{ background: e.type === 'receipt' ? '#CC0000' : '#1C1C1C' }}>
                         {e.type === 'receipt' ? 'Output' : 'Input'}
                       </span>
                     </td>
@@ -169,7 +169,7 @@ function VATTab() {
       {/* Filing History */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="flex items-center gap-3 px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>
-          <div className="w-1 h-5 rounded-full" style={{ background: '#1C2340' }} />
+          <div className="w-1 h-5 rounded-full" style={{ background: '#1C1C1C' }} />
           <h3 className="font-bold text-gray-900">VAT Filing History</h3>
         </div>
         {vatReturns.length === 0 ? (
@@ -193,7 +193,7 @@ function VATTab() {
                     <td className="px-5 py-3.5 text-right font-black" style={{ color: '#CC0000' }}>₦{Number(r.net_vat).toLocaleString()}</td>
                     <td className="px-5 py-3.5">
                       <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white"
-                        style={{ background: r.status === 'filed' ? '#1C2340' : '#CC0000' }}>
+                        style={{ background: r.status === 'filed' ? '#1C1C1C' : '#CC0000' }}>
                         {r.status}
                       </span>
                     </td>
@@ -291,7 +291,7 @@ function PayrollTab() {
             onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
           <button onClick={() => exportPayrollPDF(entries, month)}
             className="flex items-center gap-2 border-2 px-3 py-2 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
-            style={{ borderColor: '#E5E5E5', color: '#1C2340' }}>
+            style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
             <Download className="w-4 h-4" /> PDF
           </button>
         </div>
@@ -312,13 +312,13 @@ function PayrollTab() {
           <p className="text-xs font-bold uppercase tracking-widest text-white/70 mb-1">PAYE (Staff)</p>
           <p className="text-3xl font-black text-white">₦{totalPAYE.toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-5" style={{ background: '#1C2340' }}>
+        <div className="rounded-2xl p-5" style={{ background: '#1C1C1C' }}>
           <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-1">WHT (Consultants)</p>
           <p className="text-3xl font-black text-white">₦{totalWHT.toLocaleString()}</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm p-5">
           <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Total Tax Obligation</p>
-          <p className="text-3xl font-black" style={{ color: '#1C2340' }}>₦{(totalPAYE + totalWHT).toLocaleString()}</p>
+          <p className="text-3xl font-black" style={{ color: '#1C1C1C' }}>₦{(totalPAYE + totalWHT).toLocaleString()}</p>
         </div>
       </div>
 
@@ -342,7 +342,7 @@ function PayrollTab() {
                   <td className="px-5 py-3.5 font-bold text-gray-900">{e.name}</td>
                   <td className="px-5 py-3.5">
                     <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white"
-                      style={{ background: e.type === 'staff' ? '#1C2340' : '#CC0000' }}>
+                      style={{ background: e.type === 'staff' ? '#1C1C1C' : '#CC0000' }}>
                       {e.type === 'staff' ? 'Staff/PAYE' : `WHT ${(e.wht_rate * 100).toFixed(0)}%`}
                     </span>
                   </td>
@@ -350,11 +350,11 @@ function PayrollTab() {
                   <td className="px-5 py-3.5 text-right font-bold" style={{ color: '#CC0000' }}>
                     ₦{Number(e.type === 'staff' ? e.monthly_paye : e.wht_amount).toLocaleString()}
                   </td>
-                  <td className="px-5 py-3.5 text-right font-black" style={{ color: '#1C2340' }}>₦{Number(e.net_payable).toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-right font-black" style={{ color: '#1C1C1C' }}>₦{Number(e.net_payable).toLocaleString()}</td>
                   <td className="px-5 py-3.5">
                     {e.remitted ? (
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4" style={{ color: '#1C2340' }} />
+                        <CheckCircle2 className="w-4 h-4" style={{ color: '#1C1C1C' }} />
                         <span className="text-xs font-bold text-gray-500">Remitted</span>
                       </div>
                     ) : (
@@ -363,7 +363,7 @@ function PayrollTab() {
                   </td>
                   <td className="px-5 py-3.5">
                     {!e.remitted && profile?.role === 'admin' && (
-                      <button onClick={() => markRemitted(e.id)} className="text-xs font-bold underline" style={{ color: '#1C2340' }}>
+                      <button onClick={() => markRemitted(e.id)} className="text-xs font-bold underline" style={{ color: '#1C1C1C' }}>
                         Mark Remitted
                       </button>
                     )}
@@ -450,7 +450,7 @@ function PayrollTab() {
                 </button>
                 <button type="button" onClick={() => setShowModal(false)}
                   className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
-                  style={{ borderColor: '#E5E5E5', color: '#1C2340' }}>
+                  style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
                   Cancel
                 </button>
               </div>
@@ -467,7 +467,7 @@ function PayrollTab() {
 // ════════════════════════════════════════════════════════════════
 function StatusBadge({ status }) {
   const cfg = {
-    filed:   { bg: '#1C2340', text: 'white',  label: 'Filed',   icon: ShieldCheck },
+    filed:   { bg: '#1C1C1C', text: 'white',  label: 'Filed',   icon: ShieldCheck },
     pending: { bg: '#F5F5F5', text: '#999',   label: 'Pending', icon: Clock },
     overdue: { bg: '#CC0000', text: 'white',  label: 'Overdue', icon: AlertTriangle },
   }[status] ?? { bg: '#F5F5F5', text: '#999', label: status, icon: Clock }
@@ -524,29 +524,29 @@ function ComplianceTab() {
 
   const deadlines = [
     { color: '#CC0000', title: 'VAT Return — 21st of following month', desc: 'File and remit net VAT to FIRS on or before the 21st' },
-    { color: '#1C2340', title: 'PAYE Remittance — 10th of following month', desc: 'Deduct and remit PAYE to LIRS/SIRS by the 10th' },
+    { color: '#1C1C1C', title: 'PAYE Remittance — 10th of following month', desc: 'Deduct and remit PAYE to LIRS/SIRS by the 10th' },
     { color: '#CC0000', title: 'WHT Remittance — 21st of following month', desc: 'Remit WHT deducted from consultants/contractors to FIRS by 21st' },
-    { color: '#1C2340', title: 'Annual Company Tax Return — 6 months after year-end', desc: 'File CIT return within 6 months of financial year end' },
+    { color: '#1C1C1C', title: 'Annual Company Tax Return — 6 months after year-end', desc: 'File CIT return within 6 months of financial year end' },
   ]
 
   return (
     <div className="space-y-6">
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="rounded-2xl p-5" style={{ background: '#1C2340' }}>
+        <div className="rounded-2xl p-5" style={{ background: '#1C1C1C' }}>
           <p className="text-3xl font-black text-white">{vatFiled}<span className="text-lg text-white/40">/6</span></p>
           <p className="text-xs font-bold uppercase tracking-widest text-white/50 mt-1">VAT Filed</p>
         </div>
         <div className="rounded-2xl p-5" style={{ background: vatOverdue > 0 ? '#CC0000' : '#F5F5F5' }}>
-          <p className="text-3xl font-black" style={{ color: vatOverdue > 0 ? 'white' : '#1C2340' }}>{vatOverdue}</p>
+          <p className="text-3xl font-black" style={{ color: vatOverdue > 0 ? 'white' : '#1C1C1C' }}>{vatOverdue}</p>
           <p className="text-xs font-bold uppercase tracking-widest mt-1" style={{ color: vatOverdue > 0 ? 'rgba(255,255,255,0.6)' : '#999' }}>VAT Overdue</p>
         </div>
-        <div className="rounded-2xl p-5" style={{ background: '#1C2340' }}>
+        <div className="rounded-2xl p-5" style={{ background: '#1C1C1C' }}>
           <p className="text-3xl font-black text-white">{payeFiled}<span className="text-lg text-white/40">/6</span></p>
           <p className="text-xs font-bold uppercase tracking-widest text-white/50 mt-1">PAYE Remitted</p>
         </div>
         <div className="rounded-2xl p-5" style={{ background: payeOverdue > 0 ? '#CC0000' : '#F5F5F5' }}>
-          <p className="text-3xl font-black" style={{ color: payeOverdue > 0 ? 'white' : '#1C2340' }}>{payeOverdue}</p>
+          <p className="text-3xl font-black" style={{ color: payeOverdue > 0 ? 'white' : '#1C1C1C' }}>{payeOverdue}</p>
           <p className="text-xs font-bold uppercase tracking-widest mt-1" style={{ color: payeOverdue > 0 ? 'rgba(255,255,255,0.6)' : '#999' }}>PAYE Overdue</p>
         </div>
       </div>
@@ -562,7 +562,7 @@ function ComplianceTab() {
             <div key={d.title} className="flex gap-4 p-4 rounded-xl" style={{ background: '#F9F9F9' }}>
               <div className="w-1 rounded-full shrink-0 mt-1" style={{ background: d.color }} />
               <div>
-                <p className="font-bold text-sm" style={{ color: '#1C2340' }}>{d.title}</p>
+                <p className="font-bold text-sm" style={{ color: '#1C1C1C' }}>{d.title}</p>
                 <p className="text-xs text-gray-400 mt-1 leading-relaxed">{d.desc}</p>
               </div>
             </div>
@@ -573,7 +573,7 @@ function ComplianceTab() {
       {/* Monthly tracker */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="flex items-center gap-3 px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>
-          <div className="w-1 h-5 rounded-full" style={{ background: '#1C2340' }} />
+          <div className="w-1 h-5 rounded-full" style={{ background: '#1C1C1C' }} />
           <h3 className="font-bold text-gray-900">Monthly Compliance Tracker — Last 6 Months</h3>
         </div>
         <div className="overflow-x-auto">
@@ -595,7 +595,7 @@ function ComplianceTab() {
                 const overall    = bothFiled ? 'filed' : anyOverdue ? 'overdue' : 'pending'
                 return (
                   <tr key={m} className="hover:bg-gray-50/50">
-                    <td className="px-6 py-4 font-bold" style={{ color: '#1C2340' }}>{format(new Date(m), 'MMMM yyyy')}</td>
+                    <td className="px-6 py-4 font-bold" style={{ color: '#1C1C1C' }}>{format(new Date(m), 'MMMM yyyy')}</td>
                     <td className="px-6 py-4"><StatusBadge status={vatStatus} /></td>
                     <td className="px-6 py-4"><StatusBadge status={payeStatus} /></td>
                     <td className="px-6 py-4"><StatusBadge status={overall} /></td>
@@ -624,7 +624,7 @@ export default function Tax() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Finance</p>
-          <h2 className="text-2xl font-black" style={{ color: '#1C2340' }}>Tax & Compliance</h2>
+          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>Tax & Compliance</h2>
         </div>
         {/* Tab bar */}
         <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border" style={{ borderColor: '#E5E5E5' }}>
@@ -632,7 +632,7 @@ export default function Tax() {
             <button key={t} onClick={() => setTab(t)}
               className="px-4 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap"
               style={{
-                background: tab === t ? '#1C2340' : 'transparent',
+                background: tab === t ? '#1C1C1C' : 'transparent',
                 color: tab === t ? 'white' : '#888'
               }}>
               {t}

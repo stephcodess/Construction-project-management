@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { computeVAT } from '../lib/taxRules'
 import { exportJournalPDF } from '../lib/pdf'
 import { format, endOfMonth, subMonths, startOfMonth } from 'date-fns'
-import { Plus, Download, Search, X, TrendingUp, TrendingDown, DollarSign } from 'lucide-react'
+import { Plus, Download, Search, X, TrendingUp, TrendingDown, DollarSign, Paperclip, FileText } from 'lucide-react'
 
 const CATEGORIES = [
   'Contract Revenue', 'Labour Cost', 'Materials', 'Equipment Hire',
@@ -80,7 +80,7 @@ function APBreakdown({ entries }) {
             <div className="h-2 rounded-full transition-all duration-700"
               style={{ width: `${(total / max) * 100}%`, background: '#CC0000' }} />
           </div>
-          <span className="text-xs font-bold w-28 text-right shrink-0" style={{ color: '#1C2340' }}>
+          <span className="text-xs font-bold w-28 text-right shrink-0" style={{ color: '#1C1C1C' }}>
             ₦{total.toLocaleString()}
           </span>
         </div>
@@ -113,11 +113,11 @@ function CashMovementChart({ monthlyData }) {
     <div>
       <div className="flex items-center gap-4 mb-3">
         <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 rounded" style={{ background: '#CC0000' }} /><span className="text-xs text-gray-500">AR (Inflow)</span></div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 rounded" style={{ background: '#1C2340' }} /><span className="text-xs text-gray-500">AP (Outflow)</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 rounded" style={{ background: '#1C1C1C' }} /><span className="text-xs text-gray-500">AP (Outflow)</span></div>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ height: '100px' }}>
         <polyline points={toPoints(arVals)} fill="none" stroke="#CC0000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        <polyline points={toPoints(apVals)} fill="none" stroke="#1C2340" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points={toPoints(apVals)} fill="none" stroke="#1C1C1C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <div className="flex justify-between mt-1">
         {monthlyData.map((d, i) => (
@@ -136,6 +136,8 @@ function AddEntryModal({ projects, onClose, onSaved }) {
   })
   const [saving, setSaving] = useState(false)
   const [vatPreview, setVatPreview] = useState(null)
+  const [receiptFile, setReceiptFile] = useState(null)
+  const [receiptDragOver, setReceiptDragOver] = useState(false)
 
   function handleAmountChange(val) {
     setForm(f => ({ ...f, amount: val }))
@@ -146,15 +148,36 @@ function AddEntryModal({ projects, onClose, onSaved }) {
     setVatPreview(checked && form.amount ? computeVAT(Number(form.amount)) : null)
   }
 
+  function handleFileDrop(e) {
+    e.preventDefault()
+    setReceiptDragOver(false)
+    const file = e.dataTransfer?.files?.[0] ?? e.target.files?.[0]
+    if (file) setReceiptFile(file)
+  }
+
   async function handleSave(e) {
     e.preventDefault()
     setSaving(true)
     const vat = form.vat_applicable ? computeVAT(Number(form.amount)) : null
-    await supabase.from('journal_entries').insert([{
+    const { data: inserted } = await supabase.from('journal_entries').insert([{
       ...form, amount: Number(form.amount),
       vat_amount: vat?.vatAmount ?? 0,
       project_id: form.project_id || null,
-    }])
+    }]).select().single()
+
+    if (receiptFile && inserted) {
+      const path = `receipts/${Date.now()}-${receiptFile.name}`
+      const { error: uploadErr } = await supabase.storage.from('documents').upload(path, receiptFile)
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path)
+        await supabase.from('journal_entries').update({
+          receipt_url: urlData.publicUrl,
+          receipt_path: path,
+          receipt_name: receiptFile.name,
+        }).eq('id', inserted.id)
+      }
+    }
+
     setSaving(false)
     onSaved()
     onClose()
@@ -223,6 +246,38 @@ function AddEntryModal({ projects, onClose, onSaved }) {
               </div>
             </div>
           )}
+
+          {/* Receipt attachment */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Receipt / Invoice (optional)</label>
+            {receiptFile ? (
+              <div className="flex items-center gap-3 p-3 rounded-xl border-2" style={{ borderColor: '#CC0000', background: '#FFF0F0' }}>
+                <FileText className="w-5 h-5 shrink-0" style={{ color: '#CC0000' }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{receiptFile.name}</p>
+                  <p className="text-xs text-gray-400">{(receiptFile.size / 1024).toFixed(1)} KB</p>
+                </div>
+                <button type="button" onClick={() => setReceiptFile(null)} className="text-gray-400 hover:text-gray-600 transition shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div
+                onDragOver={e => { e.preventDefault(); setReceiptDragOver(true) }}
+                onDragLeave={() => setReceiptDragOver(false)}
+                onDrop={handleFileDrop}
+                onClick={() => document.getElementById('receipt-upload').click()}
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed cursor-pointer transition-colors"
+                style={{ borderColor: receiptDragOver ? '#CC0000' : '#E5E5E5', background: receiptDragOver ? '#FFF0F0' : '#FAFAFA' }}
+              >
+                <Paperclip className="w-5 h-5 text-gray-300" />
+                <p className="text-xs text-gray-400">Drag & drop or <span className="font-semibold" style={{ color: '#CC0000' }}>browse</span></p>
+                <p className="text-xs text-gray-300">PDF, JPG, PNG up to 10MB</p>
+                <input id="receipt-upload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" onChange={handleFileDrop} />
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving}
               className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60 transition"
@@ -233,7 +288,7 @@ function AddEntryModal({ projects, onClose, onSaved }) {
             </button>
             <button type="button" onClick={onClose}
               className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
-              style={{ borderColor: '#E5E5E5', color: '#1C2340' }}>
+              style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
               Cancel
             </button>
           </div>
@@ -314,9 +369,9 @@ function OverviewTab({ profile }) {
             <DollarSign className="w-4 h-4" style={{ color: '#8896B3' }} />
             <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Beginning Cash</p>
           </div>
-          <p className="text-2xl font-black" style={{ color: '#1C2340' }}>₦{beginCash.toLocaleString()}</p>
+          <p className="text-2xl font-black" style={{ color: '#1C1C1C' }}>₦{beginCash.toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl shadow-sm p-5" style={{ background: '#1C2340' }}>
+        <div className="rounded-2xl shadow-sm p-5" style={{ background: '#1C1C1C' }}>
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="w-4 h-4 text-white/50" />
             <p className="text-xs font-bold uppercase tracking-widest text-white/50">Total AR (Inflow)</p>
@@ -352,12 +407,12 @@ function OverviewTab({ profile }) {
             </div>
             <button onClick={() => exportCSV(filtered, filter.month)}
               className="flex items-center gap-1.5 border-2 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-gray-50 transition"
-              style={{ borderColor: '#E5E5E5', color: '#1C2340' }}>
+              style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
             <button onClick={() => exportJournalPDF(entries, filter.month)}
               className="flex items-center gap-1.5 border-2 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-gray-50 transition"
-              style={{ borderColor: '#E5E5E5', color: '#1C2340' }}>
+              style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
               <Download className="w-3.5 h-3.5" /> PDF
             </button>
             {(profile?.role === 'admin' || profile?.role === 'accountant') && (
@@ -375,21 +430,21 @@ function OverviewTab({ profile }) {
           <table className="w-full text-sm">
             <thead style={{ background: '#F9FAFB' }}>
               <tr className="text-xs text-gray-400 uppercase tracking-widest">
-                {['Date', 'Type', 'Description', 'Category', 'Project', 'VAT', 'Amount'].map(h => (
+                {['Date', 'Type', 'Description', 'Category', 'Project', 'VAT', 'Amount', ''].map(h => (
                   <th key={h} className={`px-5 py-3.5 font-semibold ${['VAT', 'Amount'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400 text-sm">No entries found.</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-gray-400 text-sm">No entries found.</td></tr>
               )}
               {filtered.map(e => (
                 <tr key={e.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap">{format(new Date(e.date), 'dd MMM yyyy')}</td>
                   <td className="px-5 py-3.5">
                     <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide text-white"
-                      style={{ background: e.type === 'receipt' ? '#CC0000' : '#1C2340' }}>
+                      style={{ background: e.type === 'receipt' ? '#CC0000' : '#1C1C1C' }}>
                       {e.type}
                     </span>
                   </td>
@@ -397,7 +452,19 @@ function OverviewTab({ profile }) {
                   <td className="px-5 py-3.5 text-gray-400 text-xs">{e.category}</td>
                   <td className="px-5 py-3.5 text-gray-400 text-xs">{e.projects?.name ?? '—'}</td>
                   <td className="px-5 py-3.5 text-right text-gray-400 text-xs">{e.vat_applicable ? `₦${Number(e.vat_amount).toLocaleString()}` : '—'}</td>
-                  <td className="px-5 py-3.5 text-right font-black" style={{ color: '#1C2340' }}>₦{Number(e.amount).toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-right font-black" style={{ color: '#1C1C1C' }}>₦{Number(e.amount).toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-center">
+                    {e.receipt_url ? (
+                      <a href={e.receipt_url} target="_blank" rel="noopener noreferrer"
+                        title={e.receipt_name ?? 'View receipt'}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
+                        style={{ background: '#FFF0F0' }}
+                        onMouseEnter={ev => ev.currentTarget.style.background = '#FFD7D7'}
+                        onMouseLeave={ev => ev.currentTarget.style.background = '#FFF0F0'}>
+                        <Paperclip className="w-3.5 h-3.5" style={{ color: '#CC0000' }} />
+                      </a>
+                    ) : <span className="text-gray-200 text-xs">—</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -416,7 +483,7 @@ function OverviewTab({ profile }) {
         </div>
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-1 h-5 rounded-full" style={{ background: '#1C2340' }} />
+            <div className="w-1 h-5 rounded-full" style={{ background: '#1C1C1C' }} />
             <h3 className="font-bold text-gray-900">Cash Movement (6 months)</h3>
           </div>
           <CashMovementChart monthlyData={monthlyData} />
@@ -496,7 +563,7 @@ function ForecastTab() {
               <button key={p} onClick={() => setPeriod(p)}
                 className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                 style={{
-                  background: period === p ? '#1C2340' : 'transparent',
+                  background: period === p ? '#1C1C1C' : 'transparent',
                   color: period === p ? 'white' : '#888'
                 }}>
                 {p}
@@ -518,14 +585,14 @@ function ForecastTab() {
                 const hs = HEALTH_STYLE[r.health]
                 return (
                   <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-5 py-3.5 font-bold" style={{ color: '#1C2340' }}>{r.label}</td>
+                    <td className="px-5 py-3.5 font-bold" style={{ color: '#1C1C1C' }}>{r.label}</td>
                     <td className="px-5 py-3.5 text-right text-gray-600">₦{r.ar.toLocaleString()}</td>
                     <td className="px-5 py-3.5 text-right text-gray-600">₦{r.ap.toLocaleString()}</td>
                     <td className="px-5 py-3.5 text-right font-bold"
-                      style={{ color: r.net >= 0 ? '#1C2340' : '#CC0000' }}>
+                      style={{ color: r.net >= 0 ? '#1C1C1C' : '#CC0000' }}>
                       {r.net >= 0 ? '+' : ''}₦{r.net.toLocaleString()}
                     </td>
-                    <td className="px-5 py-3.5 text-right font-black" style={{ color: '#1C2340' }}>₦{r.ending.toLocaleString()}</td>
+                    <td className="px-5 py-3.5 text-right font-black" style={{ color: '#1C1C1C' }}>₦{r.ending.toLocaleString()}</td>
                     <td className="px-5 py-3.5">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
                         style={{ background: hs.bg, color: hs.color }}>
@@ -557,7 +624,7 @@ export default function Journal() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Ledger</p>
-          <h2 className="text-2xl font-black" style={{ color: '#1C2340' }}>Cash Flow</h2>
+          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>Cash Flow</h2>
         </div>
         {/* Tab switcher */}
         <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border" style={{ borderColor: '#E5E5E5' }}>
@@ -565,7 +632,7 @@ export default function Journal() {
             <button key={t} onClick={() => setTab(t)}
               className="px-4 py-1.5 rounded-lg text-sm font-bold transition-all"
               style={{
-                background: tab === t ? '#1C2340' : 'transparent',
+                background: tab === t ? '#1C1C1C' : 'transparent',
                 color: tab === t ? 'white' : '#888'
               }}>
               {t}

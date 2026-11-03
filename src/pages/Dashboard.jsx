@@ -6,9 +6,9 @@ import { TrendingUp, TrendingDown, Receipt, Users, AlertTriangle, Info } from 'l
 function StatCard({ label, value, icon: Icon, variant }) {
   const styles = {
     red:   { card: '#CC0000', icon: 'text-white', iconBg: 'bg-white/20' },
-    dark:  { card: '#1C2340', icon: 'text-white', iconBg: 'bg-white/10' },
+    dark:  { card: '#1C1C1C', icon: 'text-white', iconBg: 'bg-white/10' },
     white: { card: '#FFFFFF', icon: 'text-[#CC0000]', iconBg: 'bg-red-50' },
-  }[variant] ?? { card: '#FFFFFF', icon: 'text-[#1C2340]', iconBg: 'bg-gray-100' }
+  }[variant] ?? { card: '#FFFFFF', icon: 'text-[#1C1C1C]', iconBg: 'bg-gray-100' }
 
   const isLight = variant === 'white'
 
@@ -19,7 +19,7 @@ function StatCard({ label, value, icon: Icon, variant }) {
       </div>
       <div>
         <p className={`text-xs font-semibold uppercase tracking-widest mb-0.5 ${isLight ? 'text-gray-400' : 'text-white/60'}`}>{label}</p>
-        <p className={`text-xl font-black ${isLight ? 'text-[#1C2340]' : 'text-white'}`}>{value}</p>
+        <p className={`text-xl font-black ${isLight ? 'text-[#1C1C1C]' : 'text-white'}`}>{value}</p>
       </div>
     </div>
   )
@@ -69,7 +69,7 @@ export default function Dashboard() {
       <div className="flex items-end justify-between">
         <div>
           <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Financial</p>
-          <h2 className="text-2xl font-black" style={{ color: '#1C2340' }}>Overview</h2>
+          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>Overview</h2>
         </div>
         <p className="text-sm text-gray-400">{format(now, 'MMMM yyyy')}</p>
       </div>
@@ -126,12 +126,12 @@ export default function Dashboard() {
                     <td className="px-6 py-3.5 text-gray-500 whitespace-nowrap">{format(new Date(e.date), 'dd MMM')}</td>
                     <td className="px-6 py-3.5">
                       <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide text-white"
-                        style={{ background: e.type === 'receipt' ? '#CC0000' : '#1C2340' }}>
+                        style={{ background: e.type === 'receipt' ? '#CC0000' : '#1C1C1C' }}>
                         {e.type}
                       </span>
                     </td>
                     <td className="px-6 py-3.5 text-gray-700">{e.description}</td>
-                    <td className="px-6 py-3.5 text-right font-black" style={{ color: '#1C2340' }}>
+                    <td className="px-6 py-3.5 text-right font-black" style={{ color: '#1C1C1C' }}>
                       ₦{Number(e.amount).toLocaleString()}
                     </td>
                   </tr>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Plus, X, Check, FolderOpen, Search } from 'lucide-react'
+import { Plus, X, Check, FolderOpen, Search, Upload, FileText } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
 
 // ── SVG Sparkline ────────────────────────────────────────────
@@ -64,8 +64,8 @@ function Input({ ...props }) {
 // ── Status badge ─────────────────────────────────────────────
 const STATUS_CFG = {
   active:    { label: 'Active',    bg: '#CC0000',  text: 'white' },
-  completed: { label: 'Completed', bg: '#1C2340',  text: 'white' },
-  on_hold:   { label: 'Pending',   bg: '#F0F2F8',  text: '#555'  },
+  completed: { label: 'Completed', bg: '#1C1C1C',  text: 'white' },
+  on_hold:   { label: 'Pending',   bg: '#F5F5F5',  text: '#555'  },
 }
 
 function StatusBadge({ status }) {
@@ -79,7 +79,7 @@ function StatusBadge({ status }) {
 }
 
 // ── 5-Step Wizard ────────────────────────────────────────────
-const STEPS = ['Basic Details', 'Financial Details', 'Status', 'Notes', 'Review']
+const STEPS = ['Basic Details', 'Financial Details', 'Status', 'Notes', 'Contract Letter', 'Review']
 
 const EMPTY_FORM = {
   project_number: '', name: '', start_date: '', expected_end_date: '',
@@ -95,6 +95,8 @@ function AddProjectWizard({ onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [contractFile, setContractFile] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
@@ -104,8 +106,20 @@ function AddProjectWizard({ onClose, onSaved }) {
     setError(''); return true
   }
 
-  function next() { if (validateStep()) setStep(s => Math.min(s + 1, 5)) }
+  function next() { if (validateStep()) setStep(s => Math.min(s + 1, 6)) }
   function back() { setError(''); setStep(s => Math.max(s - 1, 1)) }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1048576).toFixed(1)} MB`
+  }
+
+  function handleDrop(e) {
+    e.preventDefault(); setDragOver(false)
+    const dropped = e.dataTransfer.files[0]
+    if (dropped) setContractFile(dropped)
+  }
 
   async function handleCreate() {
     setSaving(true)
@@ -118,9 +132,27 @@ function AddProjectWizard({ onClose, onSaved }) {
       estimated_cost:     Number(form.estimated_cost)     || null,
       actual_cost:        Number(form.actual_cost)        || null,
     }
-    const { error: err } = await supabase.from('projects').insert([payload])
+    const { data: inserted, error: err } = await supabase.from('projects').insert([payload]).select().single()
+    if (err) { setError(err.message); setSaving(false); return }
+
+    // Upload contract letter if provided
+    if (contractFile && inserted?.id) {
+      const path = `contract-letters/${Date.now()}-${contractFile.name}`
+      const { error: uploadErr } = await supabase.storage.from('documents').upload(path, contractFile)
+      if (!uploadErr) {
+        const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path)
+        await supabase.from('contract_letters').insert([{
+          project_id: inserted.id,
+          notes: form.notes,
+          file_name: contractFile.name,
+          file_path: path,
+          file_url: publicUrl,
+          file_size: contractFile.size,
+        }])
+      }
+    }
+
     setSaving(false)
-    if (err) { setError(err.message); return }
     onSaved()
     onClose()
   }
@@ -135,7 +167,7 @@ function AddProjectWizard({ onClose, onSaved }) {
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>
-          <h3 className="font-black text-lg" style={{ color: '#1C2340' }}>Add New Project</h3>
+          <h3 className="font-black text-lg" style={{ color: '#1C1C1C' }}>Add New Project</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition"><X className="w-5 h-5" /></button>
         </div>
 
@@ -150,18 +182,18 @@ function AddProjectWizard({ onClose, onSaved }) {
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all"
                     style={{
-                      background: done ? '#1C2340' : active ? '#CC0000' : '#F0F0F0',
+                      background: done ? '#1C1C1C' : active ? '#CC0000' : '#F0F0F0',
                       color: done || active ? 'white' : '#999'
                     }}>
                     {done ? <Check className="w-3.5 h-3.5" /> : n}
                   </div>
                   <span className="text-xs font-semibold hidden sm:block"
-                    style={{ color: active ? '#CC0000' : done ? '#1C2340' : '#999' }}>
+                    style={{ color: active ? '#CC0000' : done ? '#1C1C1C' : '#999' }}>
                     {label}
                   </span>
                 </div>
                 {i < STEPS.length - 1 && (
-                  <div className="w-6 h-0.5 rounded" style={{ background: done ? '#1C2340' : '#E5E5E5' }} />
+                  <div className="w-6 h-0.5 rounded" style={{ background: done ? '#1C1C1C' : '#E5E5E5' }} />
                 )}
               </div>
             )
@@ -218,7 +250,7 @@ function AddProjectWizard({ onClose, onSaved }) {
                   }}>
                   <div className="w-3 h-3 rounded-full mb-3"
                     style={{ background: STATUS_CFG[opt.value].bg }} />
-                  <p className="font-black text-sm" style={{ color: '#1C2340' }}>{opt.label}</p>
+                  <p className="font-black text-sm" style={{ color: '#1C1C1C' }}>{opt.label}</p>
                   <p className="text-xs text-gray-400 mt-1">{opt.desc}</p>
                   {form.status === opt.value && (
                     <div className="mt-3 flex items-center gap-1.5">
@@ -253,8 +285,47 @@ function AddProjectWizard({ onClose, onSaved }) {
             </div>
           )}
 
-          {/* Step 5 — Review */}
+          {/* Step 5 — Contract Letter */}
           {step === 5 && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">Optionally attach the contract award letter for this project. You can skip this step.</p>
+              <div
+                className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${dragOver ? 'scale-[1.01]' : ''}`}
+                style={{ borderColor: dragOver || contractFile ? '#CC0000' : '#E5E5E5', background: dragOver ? '#FFF0F0' : '#FAFAFA' }}
+                onClick={() => document.getElementById('wizard-file-input').click()}
+                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}>
+                <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+                  style={{ background: contractFile ? '#CC0000' : '#F0F0F0' }}>
+                  {contractFile
+                    ? <FileText className="w-6 h-6 text-white" />
+                    : <Upload className="w-6 h-6 text-gray-400" />}
+                </div>
+                {contractFile ? (
+                  <>
+                    <p className="font-bold text-sm" style={{ color: '#CC0000' }}>{contractFile.name}</p>
+                    <p className="text-xs text-gray-400 mt-1">{formatSize(contractFile.size)}</p>
+                    <button type="button" onClick={e => { e.stopPropagation(); setContractFile(null) }}
+                      className="mt-3 text-xs text-gray-400 underline hover:text-gray-600">
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-sm text-gray-700">Drop file here or click to browse</p>
+                    <p className="text-xs text-gray-400 mt-1">PDF, DOC, DOCX, JPG, PNG accepted</p>
+                  </>
+                )}
+                <input id="wizard-file-input" type="file" className="hidden"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={e => setContractFile(e.target.files[0])} />
+              </div>
+            </div>
+          )}
+
+          {/* Step 6 — Review */}
+          {step === 6 && (
             <div className="space-y-4">
               <div className="rounded-2xl p-5 space-y-3" style={{ background: '#F9FAFB' }}>
                 <p className="text-xs font-black uppercase tracking-widest mb-4" style={{ color: '#CC0000' }}>Basic Details</p>
@@ -292,6 +363,17 @@ function AddProjectWizard({ onClose, onSaved }) {
                 <span className="text-sm text-gray-400">Status</span>
                 <StatusBadge status={form.status} />
               </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-400">Contract Letter</span>
+                {contractFile ? (
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4" style={{ color: '#CC0000' }} />
+                    <span className="text-sm font-semibold text-gray-800">{contractFile.name}</span>
+                  </div>
+                ) : (
+                  <span className="text-sm text-gray-400">— Not attached</span>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -300,10 +382,17 @@ function AddProjectWizard({ onClose, onSaved }) {
         <div className="flex items-center justify-between px-6 py-4 border-t" style={{ borderColor: '#F0F0F0' }}>
           <button onClick={back} disabled={step === 1}
             className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 transition disabled:opacity-30"
-            style={{ borderColor: '#E5E5E5', color: '#1C2340' }}>
+            style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
             Back
           </button>
-          {step < 5 ? (
+          {step === 5 && (
+            <button onClick={() => { setError(''); setStep(6) }}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 transition"
+              style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
+              Skip
+            </button>
+          )}
+          {step < 6 ? (
             <button onClick={next}
               className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition"
               style={{ background: '#CC0000' }}
@@ -381,7 +470,7 @@ export default function Projects() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Contracts</p>
-          <h2 className="text-2xl font-black" style={{ color: '#1C2340' }}>Active Projects</h2>
+          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>Active Projects</h2>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {/* Filter tabs */}
@@ -390,7 +479,7 @@ export default function Projects() {
               <button key={tab} onClick={() => setFilter(tab)}
                 className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all"
                 style={{
-                  background: filter === tab ? '#1C2340' : 'transparent',
+                  background: filter === tab ? '#1C1C1C' : 'transparent',
                   color: filter === tab ? 'white' : '#888'
                 }}>
                 {tab}
@@ -415,7 +504,7 @@ export default function Projects() {
         <div className="bg-white rounded-2xl shadow-sm p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Total Projects</p>
-            <p className="text-3xl font-black" style={{ color: '#1C2340' }}>{total}</p>
+            <p className="text-3xl font-black" style={{ color: '#1C1C1C' }}>{total}</p>
           </div>
           <Sparkline data={sparklineData} color="#CC0000" />
         </div>
@@ -423,7 +512,7 @@ export default function Projects() {
         <div className="bg-white rounded-2xl shadow-sm p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Pending</p>
-            <p className="text-3xl font-black" style={{ color: '#1C2340' }}>{pending}</p>
+            <p className="text-3xl font-black" style={{ color: '#1C1C1C' }}>{pending}</p>
           </div>
           <MiniBar data={pendingData} color="#8896B3" />
         </div>
@@ -431,14 +520,14 @@ export default function Projects() {
         <div className="bg-white rounded-2xl shadow-sm p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Completed</p>
-            <p className="text-3xl font-black" style={{ color: '#1C2340' }}>{completed}</p>
+            <p className="text-3xl font-black" style={{ color: '#1C1C1C' }}>{completed}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#F0F2F8' }}>
-            <FolderOpen className="w-5 h-5" style={{ color: '#1C2340' }} />
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#F5F5F5' }}>
+            <FolderOpen className="w-5 h-5" style={{ color: '#1C1C1C' }} />
           </div>
         </div>
         {/* Total Profit — dark card */}
-        <div className="rounded-2xl p-5 flex items-center justify-between" style={{ background: '#1C2340' }}>
+        <div className="rounded-2xl p-5 flex items-center justify-between" style={{ background: '#1C1C1C' }}>
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-1">Total Profit</p>
             <p className="text-2xl font-black text-white">₦{totalProfit.toLocaleString()}</p>
@@ -491,14 +580,14 @@ export default function Projects() {
                 return (
                   <tr key={p.id} className="hover:bg-gray-50/60 transition-colors">
                     <td className="px-5 py-3.5 text-gray-400 text-xs font-mono">{p.project_number || '—'}</td>
-                    <td className="px-5 py-3.5 font-bold" style={{ color: '#1C2340' }}>{p.name}</td>
+                    <td className="px-5 py-3.5 font-bold" style={{ color: '#1C1C1C' }}>{p.name}</td>
                     <td className="px-5 py-3.5 text-gray-500">{p.client}</td>
                     <td className="px-5 py-3.5 text-right text-gray-600">₦{estRev.toLocaleString()}</td>
                     <td className="px-5 py-3.5 text-right text-gray-600">₦{actRev.toLocaleString()}</td>
                     <td className="px-5 py-3.5 text-right text-gray-600">₦{estCost.toLocaleString()}</td>
                     <td className="px-5 py-3.5 text-right text-gray-600">₦{actCost.toLocaleString()}</td>
                     <td className="px-5 py-3.5 text-right font-black"
-                      style={{ color: net >= 0 ? '#1C2340' : '#CC0000' }}>
+                      style={{ color: net >= 0 ? '#1C1C1C' : '#CC0000' }}>
                       ₦{net.toLocaleString()}
                     </td>
                     <td className="px-5 py-3.5"><StatusBadge status={p.status} /></td>

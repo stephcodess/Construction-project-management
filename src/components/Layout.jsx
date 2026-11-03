@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
-  LayoutDashboard, TrendingUp, FolderOpen, FileText,
+  LayoutDashboard, TrendingUp, FolderOpen,
   Receipt, LogOut, Menu, X
 } from 'lucide-react'
 
@@ -10,7 +10,6 @@ const navItems = [
   { to: '/overview',  label: 'Overview',          icon: LayoutDashboard },
   { to: '/projects',  label: 'Projects',           icon: FolderOpen },
   { to: '/cashflow',  label: 'Cash Flow',          icon: TrendingUp },
-  { to: '/contracts', label: 'Contract Letters',   icon: FileText },
   { to: '/tax',       label: 'Tax & Compliance',   icon: Receipt },
 ]
 
@@ -28,7 +27,7 @@ export default function Layout({ children }) {
   const expanded = hovered || sidebarOpen
 
   return (
-    <div className="flex h-screen bg-[#F0F2F8]">
+    <div className="flex h-screen bg-[#F5F5F5]">
 
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -40,7 +39,7 @@ export default function Layout({ children }) {
       <aside
         className="fixed inset-y-0 left-0 z-30 flex flex-col transition-all duration-200 ease-in-out -translate-x-full lg:translate-x-0"
         style={{
-          background: '#1C2340',
+          background: '#1C1C1C',
           width: expanded ? '220px' : '64px',
           transform: sidebarOpen ? 'translateX(0)' : undefined,
         }}
@@ -52,7 +51,7 @@ export default function Layout({ children }) {
 
         {/* Logo */}
         <div className="flex items-center overflow-hidden border-b px-3 py-4"
-          style={{ borderColor: '#263055', minHeight: '64px' }}>
+          style={{ borderColor: '#2A2A2A', minHeight: '64px' }}>
           <img src="/unnamed.jpg" alt="Eldesign"
             className="w-9 h-9 rounded-xl object-cover shrink-0 shadow-md" />
           {expanded && (
@@ -106,9 +105,9 @@ export default function Layout({ children }) {
         </nav>
 
         {/* User + Sign out */}
-        <div className="px-2 py-3 border-t" style={{ borderColor: '#263055' }}>
+        <div className="px-2 py-3 border-t" style={{ borderColor: '#2A2A2A' }}>
           <div className="flex items-center overflow-hidden gap-3 px-2 py-2 rounded-xl mb-1"
-            style={{ background: '#263055', minHeight: '44px' }}>
+            style={{ background: '#2A2A2A', minHeight: '44px' }}>
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0"
               style={{ background: '#CC0000' }}
@@ -118,7 +117,7 @@ export default function Layout({ children }) {
             {expanded && (
               <div className="flex-1 min-w-0 animate-fadeIn">
                 <p className="text-white text-xs font-semibold truncate">{profile?.full_name ?? 'User'}</p>
-                <p className="text-[10px] capitalize" style={{ color: '#8896B3' }}>{profile?.role ?? 'staff'}</p>
+                <p className="text-[10px] capitalize" style={{ color: '#888888' }}>{profile?.role ?? 'staff'}</p>
               </div>
             )}
           </div>
@@ -128,9 +127,9 @@ export default function Layout({ children }) {
             onMouseEnter={e => e.currentTarget.style.background = '#263055'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
-            <LogOut className="w-5 h-5 shrink-0 transition-colors" style={{ color: '#8896B3' }} />
+            <LogOut className="w-5 h-5 shrink-0 transition-colors" style={{ color: '#888888' }} />
             {expanded && (
-              <span className="text-sm font-semibold animate-fadeIn whitespace-nowrap" style={{ color: '#8896B3' }}>
+              <span className="text-sm font-semibold animate-fadeIn whitespace-nowrap" style={{ color: '#888888' }}>
                 Sign Out
               </span>
             )}
