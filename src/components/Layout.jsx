@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   LayoutDashboard, TrendingUp, FolderOpen,
-  Receipt, LogOut, Menu, X
+  Receipt, LogOut, Menu, X, Users
 } from 'lucide-react'
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { to: '/projects',  label: 'Projects',           icon: FolderOpen },
   { to: '/cashflow',  label: 'Cash Flow',          icon: TrendingUp },
   { to: '/tax',       label: 'Tax & Compliance',   icon: Receipt },
+  { to: '/team',      label: 'Team',               icon: Users },
 ]
 
 export default function Layout({ children }) {

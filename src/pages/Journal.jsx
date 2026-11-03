@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { computeVAT } from '../lib/taxRules'
 import { exportJournalPDF } from '../lib/pdf'
 import { format, endOfMonth, subMonths, startOfMonth } from 'date-fns'
-import { Plus, Download, Search, X, TrendingUp, TrendingDown, DollarSign, Paperclip, FileText } from 'lucide-react'
+import { Plus, Download, Search, X, TrendingUp, TrendingDown, DollarSign, Paperclip, FileText, Pencil, Trash2 } from 'lucide-react'
 
 const CATEGORIES = [
   'Contract Revenue', 'Labour Cost', 'Materials', 'Equipment Hire',
@@ -298,6 +298,213 @@ function AddEntryModal({ projects, onClose, onSaved }) {
   )
 }
 
+// ── Edit Entry Modal ─────────────────────────────────────────
+function EditEntryModal({ entry, projects, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    date: entry.date ?? format(new Date(), 'yyyy-MM-dd'),
+    type: entry.type ?? 'receipt',
+    description: entry.description ?? '',
+    category: entry.category ?? 'Contract Revenue',
+    amount: entry.amount != null ? String(entry.amount) : '',
+    project_id: entry.project_id ?? '',
+    vat_applicable: entry.vat_applicable ?? false,
+  })
+  const [saving, setSaving] = useState(false)
+  const [vatPreview, setVatPreview] = useState(
+    entry.vat_applicable && entry.amount ? computeVAT(Number(entry.amount)) : null
+  )
+  const [receiptFile, setReceiptFile] = useState(null)
+  const [receiptDragOver, setReceiptDragOver] = useState(false)
+
+  function handleAmountChange(val) {
+    setForm(f => ({ ...f, amount: val }))
+    setVatPreview(form.vat_applicable && val ? computeVAT(Number(val)) : null)
+  }
+  function handleVATToggle(checked) {
+    setForm(f => ({ ...f, vat_applicable: checked }))
+    setVatPreview(checked && form.amount ? computeVAT(Number(form.amount)) : null)
+  }
+
+  function handleFileDrop(e) {
+    e.preventDefault()
+    setReceiptDragOver(false)
+    const file = e.dataTransfer?.files?.[0] ?? e.target.files?.[0]
+    if (file) setReceiptFile(file)
+  }
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true)
+    const vat = form.vat_applicable ? computeVAT(Number(form.amount)) : null
+    const updates = {
+      date: form.date,
+      type: form.type,
+      description: form.description,
+      category: form.category,
+      amount: Number(form.amount),
+      project_id: form.project_id || null,
+      vat_applicable: form.vat_applicable,
+      vat_amount: vat?.vatAmount ?? 0,
+    }
+
+    if (receiptFile) {
+      const path = `receipts/${Date.now()}-${receiptFile.name}`
+      const { error: uploadErr } = await supabase.storage.from('documents').upload(path, receiptFile)
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path)
+        updates.receipt_url = urlData.publicUrl
+        updates.receipt_path = path
+        updates.receipt_name = receiptFile.name
+      }
+    }
+
+    await supabase.from('journal_entries').update(updates).eq('id', entry.id)
+    setSaving(false)
+    onSaved()
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.5)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 rounded-t-2xl"
+          style={{ background: 'linear-gradient(135deg, #1C1C1C 0%, #2E2E2E 100%)', borderColor: '#2E2E2E' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
+            <h3 className="font-bold text-white">Edit Journal Entry</h3>
+          </div>
+          <button type="button" onClick={onClose} className="text-white/50 hover:text-white transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSave} className="p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Date *"><Input type="date" required value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+            <Field label="Type *">
+              <div className="flex gap-2">
+                {['receipt', 'payment'].map(t => (
+                  <button key={t} type="button"
+                    onClick={() => setForm(f => ({ ...f, type: t }))}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold uppercase tracking-wide transition-all border-2"
+                    style={{
+                      background: form.type === t ? (t === 'receipt' ? '#CC0000' : '#1C1C1C') : 'transparent',
+                      color: form.type === t ? 'white' : '#888',
+                      borderColor: form.type === t ? (t === 'receipt' ? '#CC0000' : '#1C1C1C') : '#E5E5E5',
+                    }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Category *">
+              <Select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </Select>
+            </Field>
+            <Field label="Project">
+              <Select value={form.project_id} onChange={e => setForm({ ...form, project_id: e.target.value })}>
+                <option value="">— None —</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </Select>
+            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Description *">
+                <Input required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Purpose of transaction" />
+              </Field>
+            </div>
+            <Field label="Amount (₦) *">
+              <Input type="number" required min="0" step="0.01" value={form.amount} onChange={e => handleAmountChange(e.target.value)} />
+            </Field>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <div className="w-11 h-6 rounded-full transition-colors relative"
+                  style={{ background: form.vat_applicable ? '#CC0000' : '#E5E5E5' }}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.vat_applicable ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <input type="checkbox" className="sr-only" checked={form.vat_applicable} onChange={e => handleVATToggle(e.target.checked)} />
+                </div>
+                <span className="text-sm font-medium text-gray-700">VAT (7.5%)</span>
+              </label>
+            </div>
+          </div>
+          {vatPreview && (
+            <div className="rounded-xl p-4 text-sm border" style={{ background: '#FFF0F0', borderColor: '#CC0000' }}>
+              <p className="font-bold text-xs uppercase tracking-widest mb-2" style={{ color: '#CC0000' }}>VAT Preview</p>
+              <div className="space-y-1">
+                <p className="text-gray-600">Net: <span className="font-bold text-gray-900">₦{vatPreview.netAmount.toLocaleString()}</span></p>
+                <p className="text-gray-600">VAT 7.5%: <span className="font-bold text-gray-900">₦{vatPreview.vatAmount.toLocaleString()}</span></p>
+                <p className="text-gray-600">Gross: <span className="font-black" style={{ color: '#CC0000' }}>₦{vatPreview.grossAmount.toLocaleString()}</span></p>
+              </div>
+            </div>
+          )}
+
+          {/* Receipt attachment */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Receipt / Invoice (optional)</label>
+            {entry.receipt_url && !receiptFile && (
+              <div className="flex items-center gap-3 p-3 rounded-xl border-2 mb-2" style={{ borderColor: '#E5E5E5', background: '#FAFAFA' }}>
+                <FileText className="w-5 h-5 shrink-0 text-gray-400" />
+                <div className="flex-1 min-w-0">
+                  <a href={entry.receipt_url} target="_blank" rel="noopener noreferrer"
+                    className="text-sm font-semibold truncate block hover:underline" style={{ color: '#CC0000' }}>
+                    {entry.receipt_name ?? 'Current receipt'}
+                  </a>
+                  <p className="text-xs text-gray-400">Click to view · upload below to replace</p>
+                </div>
+              </div>
+            )}
+            {receiptFile ? (
+              <div className="flex items-center gap-3 p-3 rounded-xl border-2" style={{ borderColor: '#CC0000', background: '#FFF0F0' }}>
+                <FileText className="w-5 h-5 shrink-0" style={{ color: '#CC0000' }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{receiptFile.name}</p>
+                  <p className="text-xs text-gray-400">{(receiptFile.size / 1024).toFixed(1)} KB</p>
+                </div>
+                <button type="button" onClick={() => setReceiptFile(null)} className="text-gray-400 hover:text-gray-600 transition shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div
+                onDragOver={e => { e.preventDefault(); setReceiptDragOver(true) }}
+                onDragLeave={() => setReceiptDragOver(false)}
+                onDrop={handleFileDrop}
+                onClick={() => document.getElementById('edit-receipt-upload').click()}
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed cursor-pointer transition-colors"
+                style={{ borderColor: receiptDragOver ? '#CC0000' : '#E5E5E5', background: receiptDragOver ? '#FFF0F0' : '#FAFAFA' }}
+              >
+                <Paperclip className="w-5 h-5 text-gray-300" />
+                <p className="text-xs text-gray-400">
+                  {entry.receipt_url ? 'Replace receipt — ' : ''}
+                  Drag & drop or <span className="font-semibold" style={{ color: '#CC0000' }}>browse</span>
+                </p>
+                <p className="text-xs text-gray-300">PDF, JPG, PNG up to 10MB</p>
+                <input id="edit-receipt-upload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" onChange={handleFileDrop} />
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving}
+              className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60 transition"
+              style={{ background: '#CC0000' }}
+              onMouseEnter={e => { if (!saving) e.currentTarget.style.background = '#AA0000' }}
+              onMouseLeave={e => { if (!saving) e.currentTarget.style.background = '#CC0000' }}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
+              style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Overview Tab ─────────────────────────────────────────────
 function OverviewTab({ profile }) {
   const [entries, setEntries] = useState([])
@@ -305,6 +512,8 @@ function OverviewTab({ profile }) {
   const [monthlyData, setMonthlyData] = useState([])
   const [filter, setFilter] = useState({ month: format(new Date(), 'yyyy-MM'), search: '' })
   const [showModal, setShowModal] = useState(false)
+  const [editingEntry, setEditingEntry] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   useEffect(() => { loadEntries(); loadProjects(); loadMonthlyData() }, [filter.month])
 
@@ -335,6 +544,13 @@ function OverviewTab({ profile }) {
       return { m, label, ar, ap }
     })
     setMonthlyData(months)
+  }
+
+  async function handleDelete(id) {
+    await supabase.from('journal_entries').delete().eq('id', id)
+    setConfirmDelete(null)
+    loadEntries()
+    loadMonthlyData()
   }
 
   const filtered = useMemo(() => entries.filter(e =>
@@ -430,14 +646,14 @@ function OverviewTab({ profile }) {
           <table className="w-full text-sm">
             <thead style={{ background: '#F9FAFB' }}>
               <tr className="text-xs text-gray-400 uppercase tracking-widest">
-                {['Date', 'Type', 'Description', 'Category', 'Project', 'VAT', 'Amount', ''].map(h => (
-                  <th key={h} className={`px-5 py-3.5 font-semibold ${['VAT', 'Amount'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+                {['Date', 'Type', 'Description', 'Category', 'Project', 'VAT', 'Amount', '', 'Actions'].map((h, i) => (
+                  <th key={`${h}-${i}`} className={`px-5 py-3.5 font-semibold ${['VAT', 'Amount'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400 text-sm">No entries found.</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400 text-sm">No entries found.</td></tr>
               )}
               {filtered.map(e => (
                 <tr key={e.id} className="hover:bg-gray-50/50 transition-colors">
@@ -464,6 +680,46 @@ function OverviewTab({ profile }) {
                         <Paperclip className="w-3.5 h-3.5" style={{ color: '#CC0000' }} />
                       </a>
                     ) : <span className="text-gray-200 text-xs">—</span>}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {(profile?.role === 'admin' || profile?.role === 'accountant') && (
+                      confirmDelete === e.id ? (
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                          <span className="text-xs text-gray-500">Confirm?</span>
+                          <button type="button" onClick={() => handleDelete(e.id)}
+                            className="text-xs font-bold px-2 py-1 rounded-lg text-white transition"
+                            style={{ background: '#CC0000' }}
+                            onMouseEnter={ev => ev.currentTarget.style.background = '#AA0000'}
+                            onMouseLeave={ev => ev.currentTarget.style.background = '#CC0000'}>
+                            Yes
+                          </button>
+                          <button type="button" onClick={() => setConfirmDelete(null)}
+                            className="text-xs font-bold px-2 py-1 rounded-lg border-2 hover:bg-gray-50 transition"
+                            style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => setEditingEntry(e)}
+                            title="Edit entry"
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors text-gray-400 hover:text-gray-700"
+                            style={{ background: '#F5F5F5' }}
+                            onMouseEnter={ev => ev.currentTarget.style.background = '#E5E5E5'}
+                            onMouseLeave={ev => ev.currentTarget.style.background = '#F5F5F5'}>
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button type="button" onClick={() => setConfirmDelete(e.id)}
+                            title="Delete entry"
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
+                            style={{ background: '#FFF0F0' }}
+                            onMouseEnter={ev => ev.currentTarget.style.background = '#FFD7D7'}
+                            onMouseLeave={ev => ev.currentTarget.style.background = '#FFF0F0'}>
+                            <Trash2 className="w-3.5 h-3.5" style={{ color: '#CC0000' }} />
+                          </button>
+                        </div>
+                      )
+                    )}
                   </td>
                 </tr>
               ))}
@@ -492,6 +748,11 @@ function OverviewTab({ profile }) {
 
       {showModal && (
         <AddEntryModal projects={projects} onClose={() => setShowModal(false)} onSaved={() => { loadEntries(); loadMonthlyData() }} />
+      )}
+      {editingEntry && (
+        <EditEntryModal entry={editingEntry} projects={projects}
+          onClose={() => setEditingEntry(null)}
+          onSaved={() => { setEditingEntry(null); loadEntries(); loadMonthlyData() }} />
       )}
     </div>
   )

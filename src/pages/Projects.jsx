@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Plus, X, Check, FolderOpen, Search, Upload, FileText } from 'lucide-react'
+import { Plus, X, Check, FolderOpen, Search, Upload, FileText, Pencil, Trash2, ChevronRight, ArrowRight } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
 
 // ── SVG Sparkline ────────────────────────────────────────────
@@ -75,6 +75,388 @@ function StatusBadge({ status }) {
       style={{ background: cfg.bg, color: cfg.text }}>
       {cfg.label}
     </span>
+  )
+}
+
+// ── Project P&L Drawer ────────────────────────────────────────
+function PLDrawer({ project, onClose }) {
+  const [journalEntries, setJournalEntries] = useState([])
+  const [contractLetter, setContractLetter] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!project) return
+    setLoading(true)
+    Promise.all([
+      supabase.from('journal_entries').select('*').eq('project_id', project.id).order('entry_date', { ascending: false }),
+      supabase.from('contract_letters').select('*').eq('project_id', project.id).maybeSingle(),
+    ]).then(([je, cl]) => {
+      setJournalEntries(je.data ?? [])
+      setContractLetter(cl.data ?? null)
+      setLoading(false)
+    })
+  }, [project])
+
+  if (!project) return null
+
+  const estRev   = Number(project.estimated_revenue) || 0
+  const actRev   = Number(project.actual_revenue)    || 0
+  const estCost  = Number(project.estimated_cost)    || 0
+  const actCost  = Number(project.actual_cost)       || 0
+  const estProfit = estRev - estCost
+  const actProfit = actRev - actCost
+  const estMargin = estRev > 0 ? ((estProfit / estRev) * 100) : 0
+  const actMargin = actRev > 0 ? ((actProfit / actRev) * 100) : 0
+
+  const fmt = v => `₦${Number(v).toLocaleString()}`
+  const fmtPct = v => `${v.toFixed(1)}%`
+
+  const plRows = [
+    { label: 'Revenue',      est: estRev,    act: actRev,    estFmt: fmt(estRev),    actFmt: fmt(actRev),    variance: actRev - estRev,    higherIsBetter: true },
+    { label: 'Cost',         est: estCost,   act: actCost,   estFmt: fmt(estCost),   actFmt: fmt(actCost),   variance: estCost - actCost,   higherIsBetter: false },
+    { label: 'Gross Profit', est: estProfit, act: actProfit, estFmt: fmt(estProfit), actFmt: fmt(actProfit), variance: actProfit - estProfit, higherIsBetter: true },
+    { label: 'Margin %',     est: estMargin, act: actMargin, estFmt: fmtPct(estMargin), actFmt: fmtPct(actMargin), variance: actMargin - estMargin, higherIsBetter: true },
+  ]
+
+  function VarianceBar({ est, act, higherIsBetter }) {
+    const max = Math.max(Math.abs(est), Math.abs(act), 1)
+    const estPct = Math.min((Math.abs(est) / max) * 100, 100)
+    const actPct = Math.min((Math.abs(act) / max) * 100, 100)
+    const positive = higherIsBetter ? act >= est : act <= est
+    return (
+      <div className="mt-1.5 space-y-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-400 w-6">Est</span>
+          <div className="flex-1 h-1.5 rounded-full bg-gray-100">
+            <div className="h-full rounded-full bg-gray-300 transition-all" style={{ width: `${estPct}%` }} />
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-400 w-6">Act</span>
+          <div className="flex-1 h-1.5 rounded-full bg-gray-100">
+            <div className="h-full rounded-full transition-all" style={{ width: `${actPct}%`, background: positive ? '#16a34a' : '#CC0000' }} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-30"
+        style={{ background: 'rgba(0,0,0,0.35)' }}
+        onClick={onClose}
+      />
+
+      {/* Drawer */}
+      <div
+        className="fixed top-0 right-0 h-full z-40 bg-white shadow-2xl flex flex-col overflow-hidden"
+        style={{ width: 'min(480px, 100vw)', transition: 'transform 0.3s ease' }}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 py-5 border-b shrink-0" style={{ borderColor: '#F0F0F0' }}>
+          <div className="flex-1 min-w-0 pr-3">
+            <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>
+              {project.project_number ? `#${project.project_number}` : 'Project'}
+            </p>
+            <h3 className="font-black text-lg leading-tight truncate" style={{ color: '#1C1C1C' }}>{project.name}</h3>
+            <div className="mt-2"><StatusBadge status={project.status} /></div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition shrink-0 mt-0.5">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+          {/* Details */}
+          <section>
+            <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: '#CC0000' }}>Details</p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                ['Project #',    project.project_number || '—'],
+                ['Client',       project.client || '—'],
+                ['Manager',      project.project_manager || '—'],
+                ['Location',     project.location || '—'],
+                ['Start Date',   project.start_date ? format(new Date(project.start_date), 'dd MMM yyyy') : '—'],
+                ['End Date',     project.expected_end_date ? format(new Date(project.expected_end_date), 'dd MMM yyyy') : '—'],
+              ].map(([k, v]) => (
+                <div key={k} className="bg-gray-50 rounded-xl px-3.5 py-2.5">
+                  <p className="text-xs text-gray-400 mb-0.5">{k}</p>
+                  <p className="text-sm font-semibold truncate" style={{ color: '#1C1C1C' }}>{v}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* P&L */}
+          <section>
+            <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: '#CC0000' }}>P&amp;L Summary</p>
+            <div className="space-y-3">
+              {plRows.map(row => {
+                const varPositive = row.higherIsBetter ? row.variance >= 0 : row.variance >= 0
+                const varColor = varPositive ? '#16a34a' : '#CC0000'
+                const varSign  = row.variance >= 0 ? '+' : ''
+                const varLabel = row.label === 'Margin %'
+                  ? `${varSign}${row.variance.toFixed(1)}%`
+                  : `${varSign}₦${Math.abs(row.variance).toLocaleString()}`
+                return (
+                  <div key={row.label} className="bg-gray-50 rounded-xl px-4 py-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-gray-500">{row.label}</span>
+                      <span className="text-xs font-black rounded-md px-2 py-0.5"
+                        style={{ background: varPositive ? '#f0fdf4' : '#fff0f0', color: varColor }}>
+                        {varLabel}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm">
+                      <div>
+                        <span className="text-xs text-gray-400">Est </span>
+                        <span className="font-semibold text-gray-700">{row.estFmt}</span>
+                      </div>
+                      <ArrowRight className="w-3 h-3 text-gray-300 shrink-0" />
+                      <div>
+                        <span className="text-xs text-gray-400">Act </span>
+                        <span className="font-bold" style={{ color: '#1C1C1C' }}>{row.actFmt}</span>
+                      </div>
+                    </div>
+                    <VarianceBar est={row.est} act={row.act} higherIsBetter={row.higherIsBetter} />
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          {/* Cash Flow */}
+          <section>
+            <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: '#CC0000' }}>Cash Flow / Journal Entries</p>
+            {loading ? (
+              <div className="text-sm text-gray-400 text-center py-6">Loading…</div>
+            ) : journalEntries.length === 0 ? (
+              <div className="text-center py-8 rounded-xl bg-gray-50">
+                <FileText className="w-7 h-7 mx-auto mb-2 opacity-20 text-gray-400" />
+                <p className="text-sm text-gray-400">No journal entries linked to this project.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 rounded-xl overflow-hidden border border-gray-100">
+                {journalEntries.map(je => (
+                  <div key={je.id} className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50/60 transition-colors">
+                    <div className="flex-1 min-w-0 pr-3">
+                      <p className="text-xs text-gray-400 mb-0.5">{je.entry_date ? format(new Date(je.entry_date), 'dd MMM yyyy') : '—'}</p>
+                      <p className="text-sm font-semibold truncate" style={{ color: '#1C1C1C' }}>{je.description || je.notes || '—'}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {je.type && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-lg"
+                          style={{
+                            background: je.type === 'income' ? '#f0fdf4' : '#fff0f0',
+                            color: je.type === 'income' ? '#16a34a' : '#CC0000'
+                          }}>
+                          {je.type}
+                        </span>
+                      )}
+                      <span className="text-sm font-black" style={{ color: '#1C1C1C' }}>
+                        ₦{Number(je.amount || je.total_amount || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Contract Letter */}
+          {!loading && contractLetter && (
+            <section>
+              <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: '#CC0000' }}>Contract Letter</p>
+              <a
+                href={contractLetter.file_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 hover:bg-gray-100 transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#CC0000' }}>
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold truncate" style={{ color: '#1C1C1C' }}>{contractLetter.file_name || 'Contract Letter'}</p>
+                  {contractLetter.file_size && (
+                    <p className="text-xs text-gray-400">{(contractLetter.file_size / 1024).toFixed(1)} KB</p>
+                  )}
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors shrink-0" />
+              </a>
+            </section>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ── Edit Project Modal ────────────────────────────────────────
+function EditProjectModal({ project, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    project_number:    project.project_number    ?? '',
+    name:              project.name              ?? '',
+    client:            project.client            ?? '',
+    contract_value:    project.contract_value    ?? '',
+    start_date:        project.start_date        ?? '',
+    expected_end_date: project.expected_end_date ?? '',
+    project_manager:   project.project_manager   ?? '',
+    location:          project.location          ?? '',
+    estimated_revenue: project.estimated_revenue ?? '',
+    actual_revenue:    project.actual_revenue    ?? '',
+    estimated_cost:    project.estimated_cost    ?? '',
+    actual_cost:       project.actual_cost       ?? '',
+    status:            project.status            ?? 'active',
+    description:       project.description       ?? '',
+    notes:             project.notes             ?? '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  async function handleSave() {
+    if (!form.name.trim()) { setError('Project Name is required'); return }
+    setSaving(true)
+    const payload = {
+      ...form,
+      contract_value:    Number(form.contract_value)    || null,
+      estimated_revenue: Number(form.estimated_revenue) || null,
+      actual_revenue:    Number(form.actual_revenue)    || null,
+      estimated_cost:    Number(form.estimated_cost)    || null,
+      actual_cost:       Number(form.actual_cost)       || null,
+    }
+    const { error: err } = await supabase.from('projects').update(payload).eq('id', project.id)
+    if (err) { setError(err.message); setSaving(false); return }
+    setSaving(false)
+    onSaved()
+    onClose()
+  }
+
+  const inputCls = "w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none transition"
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.55)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+
+        {/* Header — dark gradient with red circle decorations */}
+        <div className="relative flex items-center justify-between px-6 py-5 overflow-hidden shrink-0"
+          style={{ background: '#1C1C1C' }}>
+          {/* Decorative circles */}
+          <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-20" style={{ background: '#CC0000' }} />
+          <div className="absolute top-4 right-16 w-8 h-8 rounded-full opacity-10" style={{ background: '#CC0000' }} />
+          <div>
+            <p className="text-xs font-bold tracking-widest uppercase text-white/50 mb-0.5">Edit Project</p>
+            <h3 className="font-black text-lg text-white leading-tight">{project.name}</h3>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white transition z-10">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {error && (
+            <div className="mb-4 px-4 py-3 rounded-xl text-sm border"
+              style={{ background: '#FFF0F0', borderColor: '#CC0000', color: '#CC0000' }}>
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Project #">
+              <Input value={form.project_number} onChange={e => set('project_number', e.target.value)} placeholder="e.g. 101" />
+            </Field>
+            <Field label="Project Name *">
+              <Input required value={form.name} onChange={e => set('name', e.target.value)} placeholder="Project Name" />
+            </Field>
+            <Field label="Client">
+              <Input value={form.client} onChange={e => set('client', e.target.value)} placeholder="Client Name" />
+            </Field>
+            <Field label="Contract Value (₦)">
+              <Input type="number" min="0" value={form.contract_value} onChange={e => set('contract_value', e.target.value)} />
+            </Field>
+            <Field label="Start Date">
+              <Input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} />
+            </Field>
+            <Field label="Expected End Date">
+              <Input type="date" value={form.expected_end_date} onChange={e => set('expected_end_date', e.target.value)} />
+            </Field>
+            <Field label="Project Manager">
+              <Input value={form.project_manager} onChange={e => set('project_manager', e.target.value)} placeholder="Manager Name" />
+            </Field>
+            <Field label="Location">
+              <Input value={form.location} onChange={e => set('location', e.target.value)} placeholder="Site Location" />
+            </Field>
+            <Field label="Estimated Revenue (₦)">
+              <Input type="number" min="0" value={form.estimated_revenue} onChange={e => set('estimated_revenue', e.target.value)} />
+            </Field>
+            <Field label="Actual Revenue (₦)">
+              <Input type="number" min="0" value={form.actual_revenue} onChange={e => set('actual_revenue', e.target.value)} />
+            </Field>
+            <Field label="Estimated Cost (₦)">
+              <Input type="number" min="0" value={form.estimated_cost} onChange={e => set('estimated_cost', e.target.value)} />
+            </Field>
+            <Field label="Actual Cost (₦)">
+              <Input type="number" min="0" value={form.actual_cost} onChange={e => set('actual_cost', e.target.value)} />
+            </Field>
+            <Field label="Status">
+              <select value={form.status} onChange={e => set('status', e.target.value)}
+                className={inputCls}
+                onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+                onBlur={e => e.currentTarget.style.borderColor = 'transparent'}>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="on_hold">Pending</option>
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 mt-4">
+            <Field label="Description">
+              <textarea rows={3} value={form.description}
+                onChange={e => set('description', e.target.value)}
+                placeholder="Project scope and objectives…"
+                className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none resize-none transition"
+                onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+                onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
+            </Field>
+            <Field label="Internal Notes">
+              <textarea rows={3} value={form.notes}
+                onChange={e => set('notes', e.target.value)}
+                placeholder="Internal remarks, risks, considerations…"
+                className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none resize-none transition"
+                onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+                onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
+            </Field>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t shrink-0" style={{ borderColor: '#F0F0F0' }}>
+          <button onClick={onClose}
+            className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 transition"
+            style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition disabled:opacity-60"
+            style={{ background: '#CC0000' }}
+            onMouseEnter={e => { if (!saving) e.currentTarget.style.background = '#AA0000' }}
+            onMouseLeave={e => { if (!saving) e.currentTarget.style.background = '#CC0000' }}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -424,6 +806,9 @@ export default function Projects() {
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [showWizard, setShowWizard] = useState(false)
+  const [selectedProject, setSelectedProject] = useState(null)
+  const [editingProject, setEditingProject] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
   const now = new Date()
 
   useEffect(() => { loadProjects() }, [])
@@ -431,6 +816,14 @@ export default function Projects() {
   async function loadProjects() {
     const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
     setProjects(data ?? [])
+  }
+
+  async function handleDelete(id) {
+    await supabase.from('projects').delete().eq('id', id)
+    setConfirmDelete(null)
+    // Close drawer if deleted project was selected
+    if (selectedProject?.id === id) setSelectedProject(null)
+    loadProjects()
   }
 
   // KPI derived data
@@ -463,6 +856,9 @@ export default function Projects() {
     return matchFilter && matchSearch
   }), [projects, filter, search])
 
+  const isAdmin = profile?.role === 'admin'
+  const colSpan = isAdmin ? 10 : 9
+
   return (
     <div className="space-y-6">
 
@@ -486,7 +882,7 @@ export default function Projects() {
               </button>
             ))}
           </div>
-          {profile?.role === 'admin' && (
+          {isAdmin && (
             <button onClick={() => setShowWizard(true)}
               className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition"
               style={{ background: '#CC0000' }}
@@ -557,7 +953,7 @@ export default function Projects() {
           <table className="w-full text-sm">
             <thead style={{ background: '#F9FAFB' }}>
               <tr className="text-xs text-gray-400 uppercase tracking-widest">
-                {['#', 'Project Name', 'Client', 'Est. Revenue', 'Actual Revenue', 'Est. Cost', 'Actual Cost', 'Net Profit', 'Status'].map(h => (
+                {['#', 'Project Name', 'Client', 'Est. Revenue', 'Actual Revenue', 'Est. Cost', 'Actual Cost', 'Net Profit', 'Status', ...(isAdmin ? ['Actions'] : [])].map(h => (
                   <th key={h} className={`px-5 py-3.5 font-semibold ${['Est. Revenue','Actual Revenue','Est. Cost','Actual Cost','Net Profit'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
@@ -565,7 +961,7 @@ export default function Projects() {
             <tbody className="divide-y divide-gray-50">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="text-center py-16 text-gray-400">
+                  <td colSpan={colSpan} className="text-center py-16 text-gray-400">
                     <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-20" />
                     <p className="text-sm">No projects found.</p>
                   </td>
@@ -577,9 +973,25 @@ export default function Projects() {
                 const estCost = Number(p.estimated_cost)     || 0
                 const actCost = Number(p.actual_cost)        || 0
                 const net     = actRev - actCost
+                const isSelected = selectedProject?.id === p.id
+                const isConfirming = confirmDelete === p.id
                 return (
-                  <tr key={p.id} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="px-5 py-3.5 text-gray-400 text-xs font-mono">{p.project_number || '—'}</td>
+                  <tr
+                    key={p.id}
+                    onClick={() => setSelectedProject(p)}
+                    className="hover:bg-gray-50/60 transition-colors cursor-pointer relative"
+                    style={isSelected ? { background: '#FFF8F8' } : {}}
+                  >
+                    {/* Animated red left border indicator */}
+                    <td className="px-5 py-3.5 text-gray-400 text-xs font-mono relative">
+                      {isSelected && (
+                        <span
+                          className="absolute left-0 top-0 bottom-0 w-0.5 rounded-r"
+                          style={{ background: '#CC0000' }}
+                        />
+                      )}
+                      {p.project_number || '—'}
+                    </td>
                     <td className="px-5 py-3.5 font-bold" style={{ color: '#1C1C1C' }}>{p.name}</td>
                     <td className="px-5 py-3.5 text-gray-500">{p.client}</td>
                     <td className="px-5 py-3.5 text-right text-gray-600">₦{estRev.toLocaleString()}</td>
@@ -591,6 +1003,44 @@ export default function Projects() {
                       ₦{net.toLocaleString()}
                     </td>
                     <td className="px-5 py-3.5"><StatusBadge status={p.status} /></td>
+                    {isAdmin && (
+                      <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                        {isConfirming ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500 font-semibold mr-1">Confirm?</span>
+                            <button
+                              onClick={() => handleDelete(p.id)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-white transition"
+                              style={{ background: '#CC0000' }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#AA0000'}
+                              onMouseLeave={e => e.currentTarget.style.background = '#CC0000'}>
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold border transition"
+                              style={{ borderColor: '#E5E5E5', color: '#555' }}>
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setEditingProject(p)}
+                              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition"
+                              title="Edit project">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(p.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition"
+                              title="Delete project">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -598,6 +1048,20 @@ export default function Projects() {
           </table>
         </div>
       </div>
+
+      {/* P&L Drawer */}
+      {selectedProject && (
+        <PLDrawer project={selectedProject} onClose={() => setSelectedProject(null)} />
+      )}
+
+      {/* Edit Modal */}
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onSaved={() => { loadProjects(); setEditingProject(null) }}
+        />
+      )}
 
       {showWizard && (
         <AddProjectWizard onClose={() => setShowWizard(false)} onSaved={loadProjects} />

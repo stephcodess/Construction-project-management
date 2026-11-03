@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import Projects from './pages/Projects'
 import Journal from './pages/Journal'
 import Tax from './pages/Tax'
+import Team from './pages/Team'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -30,6 +31,7 @@ function AppRoutes() {
       <Route path="/projects"  element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       <Route path="/cashflow"  element={<ProtectedRoute><Journal /></ProtectedRoute>} />
       <Route path="/tax"       element={<ProtectedRoute><Tax /></ProtectedRoute>} />
+      <Route path="/team"      element={<ProtectedRoute><Team /></ProtectedRoute>} />
       {/* Legacy redirects */}
       <Route path="/journal"    element={<Navigate to="/cashflow" replace />} />
       <Route path="/contracts"  element={<Navigate to="/projects" replace />} />
