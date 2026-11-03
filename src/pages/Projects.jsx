@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import Pagination, { usePagination } from '../components/Pagination'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Plus, X, Check, FolderOpen, Search, Upload, FileText, Pencil, Trash2, ChevronRight, ArrowRight, Receipt } from 'lucide-react'
@@ -1198,6 +1199,10 @@ export default function Projects() {
     return matchFilter && matchSearch
   }), [projects, filter, search])
 
+  const { page, setPage, totalPages, paginated, total: paginatedTotal } = usePagination(filtered, 12)
+
+  useEffect(() => { setPage(1) }, [filter, search])
+
   const isAdmin = profile?.role === 'admin'
   const colSpan = isAdmin ? 10 : 9
 
@@ -1309,7 +1314,7 @@ export default function Projects() {
                   </td>
                 </tr>
               )}
-              {filtered.map(p => {
+              {paginated.map(p => {
                 const estRev  = Number(p.estimated_revenue)  || 0
                 const actRev  = Number(p.actual_revenue)     || 0
                 const estCost = Number(p.estimated_cost)     || 0
@@ -1369,6 +1374,7 @@ export default function Projects() {
             </tbody>
           </table>
         </div>
+        <Pagination page={page} totalPages={totalPages} total={paginatedTotal} pageSize={12} onPageChange={setPage} />
       </div>
 
       {/* P&L Drawer */}

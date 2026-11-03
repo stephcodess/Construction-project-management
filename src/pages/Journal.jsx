@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import Pagination, { usePagination } from '../components/Pagination'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { computeVAT } from '../lib/taxRules'
@@ -560,6 +561,10 @@ function OverviewTab({ profile }) {
     e.category?.toLowerCase().includes(filter.search.toLowerCase())
   ), [entries, filter.search])
 
+  const { page: jPage, setPage: setJPage, totalPages: jTotalPages, paginated: jPaginated, total: jTotal } = usePagination(filtered, 15)
+
+  useEffect(() => { setJPage(1) }, [filter.month, filter.search])
+
   const totalAR = filtered.filter(e => e.type === 'receipt').reduce((s, e) => s + Number(e.amount), 0)
   const totalAP = filtered.filter(e => e.type === 'payment').reduce((s, e) => s + Number(e.amount), 0)
 
@@ -656,7 +661,7 @@ function OverviewTab({ profile }) {
               {filtered.length === 0 && (
                 <tr><td colSpan={9} className="text-center py-12 text-gray-400 text-sm">No entries found.</td></tr>
               )}
-              {filtered.map(e => (
+              {jPaginated.map(e => (
                 <tr key={e.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap">{format(new Date(e.date), 'dd MMM yyyy')}</td>
                   <td className="px-5 py-3.5">
@@ -709,6 +714,7 @@ function OverviewTab({ profile }) {
             </tbody>
           </table>
         </div>
+        <Pagination page={jPage} totalPages={jTotalPages} total={jTotal} pageSize={15} onPageChange={setJPage} />
       </div>
 
       {/* Charts row */}
@@ -805,6 +811,8 @@ function ForecastTab() {
     })
   }, [allEntries, period])
 
+  const { page: fPage, setPage: setFPage, totalPages: fTotalPages, paginated: fPaginated, total: fTotal } = usePagination(rows, 12)
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -833,7 +841,7 @@ function ForecastTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {rows.map((r, i) => {
+              {fPaginated.map((r, i) => {
                 const hs = HEALTH_STYLE[r.health]
                 return (
                   <tr key={i} className="hover:bg-gray-50/50 transition-colors">
@@ -858,6 +866,7 @@ function ForecastTab() {
             </tbody>
           </table>
         </div>
+        <Pagination page={fPage} totalPages={fTotalPages} total={fTotal} pageSize={12} onPageChange={setFPage} />
       </div>
     </div>
   )

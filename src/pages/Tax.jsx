@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Pagination, { usePagination } from '../components/Pagination'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { computePAYE, computeWHT } from '../lib/taxRules'
@@ -52,6 +53,11 @@ function VATTab() {
     setEntries(journalRes.data ?? [])
     setVatReturns(returnsRes.data ?? [])
   }
+
+  const { page: vtPage, setPage: setVtPage, totalPages: vtTotalPages, paginated: vtPaginated, total: vtTotal } = usePagination(entries, 15)
+  const { page: vhPage, setPage: setVhPage, totalPages: vhTotalPages, paginated: vhPaginated, total: vhTotal } = usePagination(vatReturns, 10)
+
+  useEffect(() => { setVtPage(1) }, [month])
 
   const outputVAT = entries.filter(e => e.type === 'receipt').reduce((s, e) => s + Number(e.vat_amount), 0)
   const inputVAT  = entries.filter(e => e.type === 'payment').reduce((s, e) => s + Number(e.vat_amount), 0)
@@ -140,7 +146,7 @@ function VATTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {entries.map(e => (
+                {vtPaginated.map(e => (
                   <tr key={e.id} className="hover:bg-gray-50/50">
                     <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap">{format(new Date(e.date), 'dd MMM yyyy')}</td>
                     <td className="px-5 py-3.5">
@@ -162,6 +168,7 @@ function VATTab() {
                 </tr>
               </tfoot>
             </table>
+            <Pagination page={vtPage} totalPages={vtTotalPages} total={vtTotal} pageSize={15} onPageChange={setVtPage} />
           </div>
         )}
       </div>
@@ -185,7 +192,7 @@ function VATTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {vatReturns.map(r => (
+                {vhPaginated.map(r => (
                   <tr key={r.id} className="hover:bg-gray-50/50">
                     <td className="px-5 py-3.5 font-bold">{r.period}</td>
                     <td className="px-5 py-3.5 text-right">₦{Number(r.output_vat).toLocaleString()}</td>
@@ -202,6 +209,7 @@ function VATTab() {
                 ))}
               </tbody>
             </table>
+            <Pagination page={vhPage} totalPages={vhTotalPages} total={vhTotal} pageSize={10} onPageChange={setVhPage} />
           </div>
         )}
       </div>
@@ -277,6 +285,10 @@ function PayrollTab() {
     loadEntries()
   }
 
+  const { page: ppPage, setPage: setPpPage, totalPages: ppTotalPages, paginated: ppPaginated, total: ppTotal } = usePagination(entries, 15)
+
+  useEffect(() => { setPpPage(1) }, [month])
+
   const totalPAYE = entries.filter(e => e.type === 'staff').reduce((s, e) => s + Number(e.monthly_paye), 0)
   const totalWHT  = entries.filter(e => e.type === 'consultant').reduce((s, e) => s + Number(e.wht_amount), 0)
 
@@ -337,7 +349,7 @@ function PayrollTab() {
               {entries.length === 0 && (
                 <tr><td colSpan={7} className="text-center py-12 text-gray-400 text-sm">No entries this month.</td></tr>
               )}
-              {entries.map(e => (
+              {ppPaginated.map(e => (
                 <tr key={e.id} className="hover:bg-gray-50/50">
                   <td className="px-5 py-3.5 font-bold text-gray-900">{e.name}</td>
                   <td className="px-5 py-3.5">
@@ -372,6 +384,7 @@ function PayrollTab() {
               ))}
             </tbody>
           </table>
+          <Pagination page={ppPage} totalPages={ppTotalPages} total={ppTotal} pageSize={15} onPageChange={setPpPage} />
         </div>
       </div>
 
@@ -642,6 +655,8 @@ function WHTTab() {
     setDeductions(data ?? [])
   }
 
+  const { page: wdPage, setPage: setWdPage, totalPages: wdTotalPages, paginated: wdPaginated, total: wdTotal } = usePagination(deductions, 15)
+
   const totalDeducted = deductions.reduce((s, e) => s + Number(e.wht_amount), 0)
 
   // ── Certificates Received state ────────────────────────────────
@@ -700,6 +715,8 @@ function WHTTab() {
       .eq('id', cert.id)
     loadCerts()
   }
+
+  const { page: wcPage, setPage: setWcPage, totalPages: wcTotalPages, paginated: wcPaginated, total: wcTotal } = usePagination(certs, 15)
 
   const totalCertValue = certs.reduce((s, c) => s + Number(c.wht_amount), 0)
   const unclaimedCerts = certs.filter(c => !c.claimed)
@@ -769,7 +786,7 @@ function WHTTab() {
                   {deductions.length === 0 && (
                     <tr><td colSpan={7} className="text-center py-12 text-gray-400 text-sm">No WHT deductions this month.</td></tr>
                   )}
-                  {deductions.map(e => (
+                  {wdPaginated.map(e => (
                     <tr key={e.id} className="hover:bg-gray-50/50">
                       <td className="px-5 py-3.5 font-bold text-gray-900">{e.name}</td>
                       <td className="px-5 py-3.5 text-gray-500">{e.projects?.name ?? '—'}</td>
@@ -801,6 +818,7 @@ function WHTTab() {
                   </tfoot>
                 )}
               </table>
+              <Pagination page={wdPage} totalPages={wdTotalPages} total={wdTotal} pageSize={15} onPageChange={setWdPage} />
             </div>
           </div>
         </div>
@@ -856,7 +874,7 @@ function WHTTab() {
                   {certs.length === 0 && (
                     <tr><td colSpan={8} className="text-center py-12 text-gray-400 text-sm">No certificates recorded yet.</td></tr>
                   )}
-                  {certs.map(c => (
+                  {wcPaginated.map(c => (
                     <tr key={c.id} className="hover:bg-gray-50/50">
                       <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap">
                         {c.date_received ? format(new Date(c.date_received), 'dd MMM yyyy') : '—'}
@@ -903,6 +921,7 @@ function WHTTab() {
                   </tfoot>
                 )}
               </table>
+              <Pagination page={wcPage} totalPages={wcTotalPages} total={wcTotal} pageSize={15} onPageChange={setWcPage} />
             </div>
           </div>
         </div>

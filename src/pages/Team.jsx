@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Plus, X, Users, Shield, UserCheck, AlertTriangle } from 'lucide-react'
 import { format } from 'date-fns'
+import Pagination, { usePagination } from '../components/Pagination'
 
 // ── Helpers ───────────────────────────────────────────────────
 function Field({ label, children }) {
@@ -369,6 +370,9 @@ export default function Team() {
   const adminCount = useMemo(() => members.filter(m => m.role === 'admin').length, [members])
   const staffCount = useMemo(() => members.filter(m => m.role === 'staff' || m.role === 'accountant').length, [members])
 
+  // Pagination
+  const { page: mPage, setPage: setMPage, totalPages: mTotalPages, paginated: mPaginated, total: mTotal } = usePagination(members, 10)
+
   // ── Access Denied ─────────────────────────────────────────
   if (!isAdmin) {
     return (
@@ -526,7 +530,7 @@ export default function Team() {
                   </td>
                 </tr>
               )}
-              {!loading && members.map(member => (
+              {!loading && mPaginated.map(member => (
                 <MemberRow
                   key={member.id}
                   member={member}
@@ -541,6 +545,9 @@ export default function Team() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="px-6 pb-4">
+          <Pagination page={mPage} totalPages={mTotalPages} total={mTotal} pageSize={10} onPageChange={setMPage} />
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import Pagination, { usePagination } from '../components/Pagination'
 import {
   format, startOfMonth, endOfMonth, subMonths, addMonths, differenceInDays
 } from 'date-fns'
@@ -322,8 +323,9 @@ export default function Dashboard() {
     })
   }, [allEntries])
 
-  // ── Recent 6 journal entries ──────────────────────────────────
-  const recentEntries = useMemo(() => allEntries.slice(0, 6), [allEntries])
+  // ── Recent 50 journal entries (paginated at 8 per page) ───────
+  const recentEntries = useMemo(() => allEntries.slice(0, 50), [allEntries])
+  const { page: rePage, setPage: setRePage, totalPages: reTotalPages, paginated: rePaginated, total: reTotal } = usePagination(recentEntries, 8)
 
   // ── Top 5 active projects ─────────────────────────────────────
   const topProjects = useMemo(() => kpi.activeProjects.slice(0, 5), [kpi.activeProjects])
@@ -594,7 +596,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="space-y-2">
-              {recentEntries.map(e => (
+              {rePaginated.map(e => (
                 <div key={e.id} className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
                   {/* Type dot */}
                   <div
@@ -636,6 +638,7 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+          <Pagination page={rePage} totalPages={reTotalPages} total={reTotal} pageSize={8} onPageChange={setRePage} />
         </div>
       </div>
     </div>
