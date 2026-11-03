@@ -6,9 +6,9 @@ import { TrendingUp, TrendingDown, Receipt, Users, AlertTriangle, Info } from 'l
 function StatCard({ label, value, icon: Icon, variant }) {
   const styles = {
     red:   { card: '#CC0000', icon: 'text-white', iconBg: 'bg-white/20' },
-    dark:  { card: '#1C1C1C', icon: 'text-white', iconBg: 'bg-white/10' },
+    dark:  { card: '#1C2340', icon: 'text-white', iconBg: 'bg-white/10' },
     white: { card: '#FFFFFF', icon: 'text-[#CC0000]', iconBg: 'bg-red-50' },
-  }[variant] ?? { card: '#FFFFFF', icon: 'text-[#1C1C1C]', iconBg: 'bg-gray-100' }
+  }[variant] ?? { card: '#FFFFFF', icon: 'text-[#1C2340]', iconBg: 'bg-gray-100' }
 
   const isLight = variant === 'white'
 
@@ -19,7 +19,7 @@ function StatCard({ label, value, icon: Icon, variant }) {
       </div>
       <div>
         <p className={`text-xs font-semibold uppercase tracking-widest mb-0.5 ${isLight ? 'text-gray-400' : 'text-white/60'}`}>{label}</p>
-        <p className={`text-xl font-black ${isLight ? 'text-[#1C1C1C]' : 'text-white'}`}>{value}</p>
+        <p className={`text-xl font-black ${isLight ? 'text-[#1C2340]' : 'text-white'}`}>{value}</p>
       </div>
     </div>
   )
@@ -55,7 +55,7 @@ export default function Dashboard() {
       const day = now.getDate()
       const alertList = []
       if (day >= 20) alertList.push({ type: 'warn', msg: 'VAT return due by the 21st of this month' })
-      if (day >= 7) alertList.push({ type: 'warn', msg: 'PAYE remittance due by the 10th of next month' })
+      if (day >= 7)  alertList.push({ type: 'warn', msg: 'PAYE remittance due by the 10th of next month' })
       if (outputVAT - inputVAT > 0) alertList.push({ type: 'info', msg: `Net VAT payable this month: ₦${(outputVAT - inputVAT).toLocaleString()}` })
       setAlerts(alertList)
     }
@@ -68,18 +68,18 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Overview</p>
-          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>Dashboard</h2>
+          <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Financial</p>
+          <h2 className="text-2xl font-black" style={{ color: '#1C2340' }}>Overview</h2>
         </div>
         <p className="text-sm text-gray-400">{format(now, 'MMMM yyyy')}</p>
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Receipts"  value={`₦${stats.receipts.toLocaleString()}`}      icon={TrendingUp}   variant="red"   />
-        <StatCard label="Total Payments"  value={`₦${stats.payments.toLocaleString()}`}      icon={TrendingDown} variant="dark"  />
-        <StatCard label="Net VAT Due"     value={`₦${stats.vatDue.toLocaleString()}`}        icon={Receipt}      variant="white" />
-        <StatCard label="Pending Tax/WHT" value={`₦${stats.pendingPayroll.toLocaleString()}`} icon={Users}       variant="white" />
+        <StatCard label="Total Receipts"   value={`₦${stats.receipts.toLocaleString()}`}       icon={TrendingUp}   variant="red"   />
+        <StatCard label="Total Payments"   value={`₦${stats.payments.toLocaleString()}`}       icon={TrendingDown} variant="dark"  />
+        <StatCard label="Net VAT Due"      value={`₦${stats.vatDue.toLocaleString()}`}         icon={Receipt}      variant="white" />
+        <StatCard label="Pending Tax/WHT"  value={`₦${stats.pendingPayroll.toLocaleString()}`} icon={Users}        variant="white" />
       </div>
 
       {/* Alerts */}
@@ -87,11 +87,8 @@ export default function Dashboard() {
         <div className="space-y-2">
           {alerts.map((a, i) => (
             <div key={i} className={`flex items-center gap-3 p-3.5 rounded-xl text-sm font-medium border ${
-              a.type === 'warn'
-                ? 'border-[#CC0000]/30 text-[#CC0000]'
-                : 'border-gray-200 text-gray-600'
-            }`}
-              style={{ background: a.type === 'warn' ? '#FFF0F0' : '#F9F9F9' }}>
+              a.type === 'warn' ? 'border-[#CC0000]/30 text-[#CC0000]' : 'border-gray-200 text-gray-600'
+            }`} style={{ background: a.type === 'warn' ? '#FFF0F0' : '#F9F9F9' }}>
               {a.type === 'warn'
                 ? <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: '#CC0000' }} />
                 : <Info className="w-4 h-4 shrink-0 text-gray-400" />}
@@ -128,17 +125,13 @@ export default function Dashboard() {
                   <tr key={e.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-3.5 text-gray-500 whitespace-nowrap">{format(new Date(e.date), 'dd MMM')}</td>
                     <td className="px-6 py-3.5">
-                      <span className={`px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide ${
-                        e.type === 'receipt'
-                          ? 'text-white'
-                          : 'text-white'
-                      }`}
-                        style={{ background: e.type === 'receipt' ? '#CC0000' : '#1C1C1C' }}>
+                      <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide text-white"
+                        style={{ background: e.type === 'receipt' ? '#CC0000' : '#1C2340' }}>
                         {e.type}
                       </span>
                     </td>
                     <td className="px-6 py-3.5 text-gray-700">{e.description}</td>
-                    <td className="px-6 py-3.5 text-right font-black" style={{ color: '#1C1C1C' }}>
+                    <td className="px-6 py-3.5 text-right font-black" style={{ color: '#1C2340' }}>
                       ₦{Number(e.amount).toLocaleString()}
                     </td>
                   </tr>

@@ -6,14 +6,12 @@ import Dashboard from './pages/Dashboard'
 import Projects from './pages/Projects'
 import Journal from './pages/Journal'
 import ContractLetters from './pages/ContractLetters'
-import VAT from './pages/VAT'
-import Payroll from './pages/Payroll'
-import Compliance from './pages/Compliance'
+import Tax from './pages/Tax'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-[#F0F2F8]">
       <div className="text-gray-400 text-sm">Loading…</div>
     </div>
   )
@@ -27,15 +25,19 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
-      <Route path="/journal" element={<ProtectedRoute><Journal /></ProtectedRoute>} />
+      <Route path="/login" element={user ? <Navigate to="/projects" replace /> : <Login />} />
+      <Route path="/" element={<Navigate to="/projects" replace />} />
+      <Route path="/overview"  element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/projects"  element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+      <Route path="/cashflow"  element={<ProtectedRoute><Journal /></ProtectedRoute>} />
       <Route path="/contracts" element={<ProtectedRoute><ContractLetters /></ProtectedRoute>} />
-      <Route path="/vat" element={<ProtectedRoute><VAT /></ProtectedRoute>} />
-      <Route path="/payroll" element={<ProtectedRoute><Payroll /></ProtectedRoute>} />
-      <Route path="/compliance" element={<ProtectedRoute><Compliance /></ProtectedRoute>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/tax"       element={<ProtectedRoute><Tax /></ProtectedRoute>} />
+      {/* Legacy redirects */}
+      <Route path="/journal"    element={<Navigate to="/cashflow" replace />} />
+      <Route path="/vat"        element={<Navigate to="/tax" replace />} />
+      <Route path="/payroll"    element={<Navigate to="/tax" replace />} />
+      <Route path="/compliance" element={<Navigate to="/tax" replace />} />
+      <Route path="*" element={<Navigate to="/projects" replace />} />
     </Routes>
   )
 }
