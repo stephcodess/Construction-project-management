@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Upload, FileText, Download, Trash2 } from 'lucide-react'
+import { Upload, FileText, Download, Trash2, X } from 'lucide-react'
 import { format } from 'date-fns'
 
 export default function ContractLetters() {
@@ -13,6 +13,7 @@ export default function ContractLetters() {
   const [file, setFile] = useState(null)
   const [error, setError] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [showModal, setShowModal] = useState(false)
 
   useEffect(() => { loadLetters(); loadProjects() }, [])
 
@@ -39,6 +40,7 @@ export default function ContractLetters() {
       file_name: file.name, file_path: path, file_url: publicUrl, file_size: file.size,
     }])
     setUploading(false); setFile(null); setForm({ project_id: '', notes: '' })
+    setShowModal(false)
     loadLetters()
   }
 
@@ -65,77 +67,107 @@ export default function ContractLetters() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div>
-        <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Documents</p>
-        <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>Contract Award Letters</h2>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Documents</p>
+          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>Contract Award Letters</h2>
+        </div>
+        {(profile?.role === 'admin' || profile?.role === 'accountant') && (
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition"
+            style={{ background: '#CC0000' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#AA0000'}
+            onMouseLeave={e => e.currentTarget.style.background = '#CC0000'}>
+            <Upload className="w-4 h-4" /> Upload Document
+          </button>
+        )}
       </div>
 
-      {(profile?.role === 'admin' || profile?.role === 'accountant') && (
-        <form onSubmit={handleUpload} className="bg-white rounded-2xl shadow-sm p-6 space-y-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
-            <h3 className="font-bold text-gray-900">Upload Contract Letter</h3>
+      {/* Upload Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowModal(false) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
+                <h3 className="font-bold text-gray-900">Upload Contract Letter</h3>
+              </div>
+              <button type="button" onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {/* Modal body */}
+            <form onSubmit={handleUpload} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Related Project</label>
+                  <select value={form.project_id} onChange={e => setForm({ ...form, project_id: e.target.value })}
+                    className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none">
+                    <option value="">— None —</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Notes</label>
+                  <input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
+                    placeholder="e.g. Phase 1 award letter"
+                    className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                    onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
+                </div>
+              </div>
+              {/* Drop zone */}
+              <div
+                className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${dragOver ? 'scale-[1.01]' : ''}`}
+                style={{ borderColor: dragOver || file ? '#CC0000' : '#E5E5E5', background: dragOver ? '#FFF0F0' : '#FAFAFA' }}
+                onClick={() => document.getElementById('file-input').click()}
+                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}>
+                <div className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center"
+                  style={{ background: file ? '#CC0000' : '#F0F0F0' }}>
+                  <Upload className={`w-5 h-5 ${file ? 'text-white' : 'text-gray-400'}`} />
+                </div>
+                {file ? (
+                  <>
+                    <p className="font-bold text-sm" style={{ color: '#CC0000' }}>{file.name}</p>
+                    <p className="text-xs text-gray-400 mt-1">{formatSize(file.size)}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-sm text-gray-700">Drop file here or click to browse</p>
+                    <p className="text-xs text-gray-400 mt-1">PDF, DOC, DOCX, JPG, PNG accepted</p>
+                  </>
+                )}
+                <input id="file-input" type="file" className="hidden"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={e => setFile(e.target.files[0])} />
+              </div>
+              {error && (
+                <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm border"
+                  style={{ background: '#FFF0F0', borderColor: '#CC0000', color: '#CC0000' }}>
+                  {error}
+                </div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button type="submit" disabled={uploading}
+                  className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60 transition"
+                  style={{ background: '#CC0000' }}
+                  onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = '#AA0000' }}
+                  onMouseLeave={e => { if (!uploading) e.currentTarget.style.background = '#CC0000' }}>
+                  {uploading ? 'Uploading…' : 'Upload Document'}
+                </button>
+                <button type="button" onClick={() => setShowModal(false)}
+                  className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
+                  style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Related Project</label>
-              <select value={form.project_id} onChange={e => setForm({ ...form, project_id: e.target.value })}
-                className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none">
-                <option value="">— None —</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Notes</label>
-              <input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
-                placeholder="e.g. Phase 1 award letter"
-                className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-                onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
-                onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
-            </div>
-          </div>
-
-          {/* Drop zone */}
-          <div
-            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${dragOver ? 'scale-[1.01]' : ''}`}
-            style={{ borderColor: dragOver || file ? '#CC0000' : '#E5E5E5', background: dragOver ? '#FFF0F0' : '#FAFAFA' }}
-            onClick={() => document.getElementById('file-input').click()}
-            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}>
-            <div className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center"
-              style={{ background: file ? '#CC0000' : '#F0F0F0' }}>
-              <Upload className={`w-5 h-5 ${file ? 'text-white' : 'text-gray-400'}`} />
-            </div>
-            {file ? (
-              <>
-                <p className="font-bold text-sm" style={{ color: '#CC0000' }}>{file.name}</p>
-                <p className="text-xs text-gray-400 mt-1">{formatSize(file.size)}</p>
-              </>
-            ) : (
-              <>
-                <p className="font-bold text-sm text-gray-700">Drop file here or click to browse</p>
-                <p className="text-xs text-gray-400 mt-1">PDF, DOC, DOCX, JPG, PNG accepted</p>
-              </>
-            )}
-            <input id="file-input" type="file" className="hidden"
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              onChange={e => setFile(e.target.files[0])} />
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm border"
-              style={{ background: '#FFF0F0', borderColor: '#CC0000', color: '#CC0000' }}>
-              {error}
-            </div>
-          )}
-
-          <button type="submit" disabled={uploading}
-            className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60"
-            style={{ background: '#CC0000' }}>
-            {uploading ? 'Uploading…' : 'Upload Document'}
-          </button>
-        </form>
+        </div>
       )}
 
       {/* Document list */}

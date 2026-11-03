@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { computeVAT } from '../lib/taxRules'
 import { exportJournalPDF } from '../lib/pdf'
 import { format, endOfMonth } from 'date-fns'
-import { Plus, Download, Search } from 'lucide-react'
+import { Plus, Download, Search, X } from 'lucide-react'
 
 const CATEGORIES = [
   'Contract Revenue', 'Labour Cost', 'Materials', 'Equipment Hire',
@@ -168,74 +168,86 @@ export default function Journal() {
         </div>
       </div>
 
-      {/* Entry form */}
+      {/* Modal */}
       {showForm && (
-        <form onSubmit={handleSave} className="bg-white rounded-2xl shadow-sm p-6 space-y-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
-            <h3 className="font-bold text-gray-900">New Journal Entry</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Date *"><Input type="date" required value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
-            <Field label="Type *">
-              <Select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
-                <option value="receipt">Receipt</option>
-                <option value="payment">Payment</option>
-              </Select>
-            </Field>
-            <Field label="Category *">
-              <Select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </Select>
-            </Field>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Description *">
-              <Input required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Purpose of transaction" />
-            </Field>
-            <Field label="Project">
-              <Select value={form.project_id} onChange={e => setForm({ ...form, project_id: e.target.value })}>
-                <option value="">— None —</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </Select>
-            </Field>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-            <Field label="Amount (₦) *">
-              <Input type="number" required min="0" step="0.01" value={form.amount} onChange={e => handleAmountChange(e.target.value)} />
-            </Field>
-            <div className="pb-1">
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <div className={`w-11 h-6 rounded-full transition-colors relative ${form.vat_applicable ? '' : 'bg-gray-200'}`}
-                  style={form.vat_applicable ? { background: '#CC0000' } : {}}>
-                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.vat_applicable ? 'translate-x-6' : 'translate-x-1'}`} />
-                  <input type="checkbox" className="sr-only" checked={form.vat_applicable} onChange={e => handleVATToggle(e.target.checked)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowForm(false) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white" style={{ borderColor: '#F0F0F0' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
+                <h3 className="font-bold text-gray-900">New Journal Entry</h3>
+              </div>
+              <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {/* Body */}
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Date *"><Input type="date" required value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+                <Field label="Type *">
+                  <Select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+                    <option value="receipt">Receipt</option>
+                    <option value="payment">Payment</option>
+                  </Select>
+                </Field>
+                <Field label="Category *">
+                  <Select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Project">
+                  <Select value={form.project_id} onChange={e => setForm({ ...form, project_id: e.target.value })}>
+                    <option value="">— None —</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </Select>
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Description *">
+                    <Input required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Purpose of transaction" />
+                  </Field>
                 </div>
-                <span className="text-sm font-medium text-gray-700">VAT Applicable (7.5%)</span>
-              </label>
-            </div>
+                <Field label="Amount (₦) *">
+                  <Input type="number" required min="0" step="0.01" value={form.amount} onChange={e => handleAmountChange(e.target.value)} />
+                </Field>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <div className={`w-11 h-6 rounded-full transition-colors relative ${form.vat_applicable ? '' : 'bg-gray-200'}`}
+                      style={form.vat_applicable ? { background: '#CC0000' } : {}}>
+                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.vat_applicable ? 'translate-x-6' : 'translate-x-1'}`} />
+                      <input type="checkbox" className="sr-only" checked={form.vat_applicable} onChange={e => handleVATToggle(e.target.checked)} />
+                    </div>
+                    <span className="text-sm font-medium text-gray-700">VAT Applicable (7.5%)</span>
+                  </label>
+                </div>
+              </div>
+              {vatPreview && (
+                <div className="rounded-xl p-4 text-sm space-y-1 border" style={{ background: '#FFF0F0', borderColor: '#CC0000' }}>
+                  <p className="font-bold text-xs uppercase tracking-widest mb-2" style={{ color: '#CC0000' }}>VAT Preview</p>
+                  <p className="text-gray-600">Net: <span className="font-bold text-gray-900">₦{vatPreview.netAmount.toLocaleString()}</span></p>
+                  <p className="text-gray-600">VAT 7.5%: <span className="font-bold text-gray-900">₦{vatPreview.vatAmount.toLocaleString()}</span></p>
+                  <p className="text-gray-600">Gross: <span className="font-black" style={{ color: '#CC0000' }}>₦{vatPreview.grossAmount.toLocaleString()}</span></p>
+                </div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={saving}
+                  className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60 transition"
+                  style={{ background: '#CC0000' }}
+                  onMouseEnter={e => { if (!saving) e.currentTarget.style.background = '#AA0000' }}
+                  onMouseLeave={e => { if (!saving) e.currentTarget.style.background = '#CC0000' }}>
+                  {saving ? 'Saving…' : 'Post Entry'}
+                </button>
+                <button type="button" onClick={() => setShowForm(false)}
+                  className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
+                  style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
-          {vatPreview && (
-            <div className="rounded-xl p-4 text-sm space-y-1 border" style={{ background: '#FFF0F0', borderColor: '#CC0000' }}>
-              <p className="font-bold text-xs uppercase tracking-widest mb-2" style={{ color: '#CC0000' }}>VAT Preview</p>
-              <p className="text-gray-600">Net: <span className="font-bold text-gray-900">₦{vatPreview.netAmount.toLocaleString()}</span></p>
-              <p className="text-gray-600">VAT 7.5%: <span className="font-bold text-gray-900">₦{vatPreview.vatAmount.toLocaleString()}</span></p>
-              <p className="text-gray-600">Gross: <span className="font-black" style={{ color: '#CC0000' }}>₦{vatPreview.grossAmount.toLocaleString()}</span></p>
-            </div>
-          )}
-          <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={saving}
-              className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60"
-              style={{ background: '#CC0000' }}>
-              {saving ? 'Saving…' : 'Post Entry'}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)}
-              className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
-              style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
-              Cancel
-            </button>
-          </div>
-        </form>
+        </div>
       )}
 
       {/* Table */}

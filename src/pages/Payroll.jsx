@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { computePAYE, computeWHT } from '../lib/taxRules'
 import { exportPayrollPDF } from '../lib/pdf'
 import { format } from 'date-fns'
-import { Plus, Download, CheckCircle2 } from 'lucide-react'
+import { Plus, Download, CheckCircle2, X } from 'lucide-react'
 
 export default function Payroll() {
   const { profile } = useAuth()
@@ -122,100 +122,109 @@ export default function Payroll() {
         </div>
       </div>
 
-      {/* Form */}
+      {/* Modal */}
       {showForm && (
-        <form onSubmit={handleSave} className="bg-white rounded-2xl shadow-sm p-6 space-y-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
-            <h3 className="font-bold text-gray-900">New Payroll Entry</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { label: 'Full Name *', key: 'name', type: 'text', required: true },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">{f.label}</label>
-                <input type={f.type} required={f.required} value={form[f.key]}
-                  onChange={e => handleFormChange(f.key, e.target.value)}
-                  className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-                  onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowForm(false) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white" style={{ borderColor: '#F0F0F0' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
+                <h3 className="font-bold text-gray-900">New Payroll Entry</h3>
               </div>
-            ))}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Type *</label>
-              <select value={form.type} onChange={e => handleFormChange('type', e.target.value)}
-                className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm">
-                <option value="staff">Staff (PAYE)</option>
-                <option value="consultant">Consultant / Contractor (WHT)</option>
-              </select>
+              <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">
-                {form.type === 'staff' ? 'Monthly Gross (₦) *' : 'Invoice Amount (₦) *'}
-              </label>
-              <input type="number" required min="0" step="0.01" value={form.gross_amount}
-                onChange={e => handleFormChange('gross_amount', e.target.value)}
-                className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-                onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
-                onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
-            </div>
-          </div>
-          {form.type === 'consultant' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Entity Type</label>
-                <select value={form.entity_type} onChange={e => handleFormChange('entity_type', e.target.value)}
-                  className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm">
-                  <option value="individual">Individual (5% WHT)</option>
-                  <option value="company">Company (10% WHT)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Project</label>
-                <select value={form.project_id} onChange={e => handleFormChange('project_id', e.target.value)}
-                  className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm">
-                  <option value="">— None —</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-            </div>
-          )}
-          {preview && (
-            <div className="rounded-xl p-4 border" style={{ background: '#FFF0F0', borderColor: '#CC0000' }}>
-              <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: '#CC0000' }}>Tax Preview</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                {preview.type === 'staff' ? (
+            {/* Body */}
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Full Name *</label>
+                  <input type="text" required value={form.name}
+                    onChange={e => handleFormChange('name', e.target.value)}
+                    className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                    onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Type *</label>
+                  <select value={form.type} onChange={e => handleFormChange('type', e.target.value)}
+                    className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm">
+                    <option value="staff">Staff (PAYE)</option>
+                    <option value="consultant">Consultant / Contractor (WHT)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">
+                    {form.type === 'staff' ? 'Monthly Gross (₦) *' : 'Invoice Amount (₦) *'}
+                  </label>
+                  <input type="number" required min="0" step="0.01" value={form.gross_amount}
+                    onChange={e => handleFormChange('gross_amount', e.target.value)}
+                    className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                    onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
+                </div>
+                {form.type === 'consultant' && (
                   <>
-                    <div><p className="text-gray-400 text-xs">Annual Gross</p><p className="font-bold">₦{preview.annualGross?.toLocaleString()}</p></div>
-                    <div><p className="text-gray-400 text-xs">CRA Relief</p><p className="font-bold">₦{preview.cra?.toLocaleString()}</p></div>
-                    <div><p className="text-gray-400 text-xs">Annual PAYE</p><p className="font-bold">₦{preview.annualPAYE?.toLocaleString()}</p></div>
-                    <div><p className="text-gray-400 text-xs">Monthly PAYE</p><p className="font-black text-base" style={{ color: '#CC0000' }}>₦{preview.monthlyPAYE?.toLocaleString()}</p></div>
-                    <div><p className="text-gray-400 text-xs">Net Monthly Pay</p><p className="font-black text-base">₦{preview.net_payable?.toLocaleString()}</p></div>
-                  </>
-                ) : (
-                  <>
-                    <div><p className="text-gray-400 text-xs">WHT Rate</p><p className="font-bold">{(preview.whtRate * 100).toFixed(0)}%</p></div>
-                    <div><p className="text-gray-400 text-xs">WHT Deduction</p><p className="font-black text-base" style={{ color: '#CC0000' }}>₦{preview.whtAmount?.toLocaleString()}</p></div>
-                    <div><p className="text-gray-400 text-xs">Net Payable</p><p className="font-black text-base">₦{preview.netPayable?.toLocaleString()}</p></div>
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Entity Type</label>
+                      <select value={form.entity_type} onChange={e => handleFormChange('entity_type', e.target.value)}
+                        className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm">
+                        <option value="individual">Individual (5% WHT)</option>
+                        <option value="company">Company (10% WHT)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Project</label>
+                      <select value={form.project_id} onChange={e => handleFormChange('project_id', e.target.value)}
+                        className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm">
+                        <option value="">— None —</option>
+                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
                   </>
                 )}
               </div>
-            </div>
-          )}
-          <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={saving}
-              className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60"
-              style={{ background: '#CC0000' }}>
-              {saving ? 'Saving…' : 'Save Entry'}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)}
-              className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
-              style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
-              Cancel
-            </button>
+              {preview && (
+                <div className="rounded-xl p-4 border" style={{ background: '#FFF0F0', borderColor: '#CC0000' }}>
+                  <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: '#CC0000' }}>Tax Preview</p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {preview.type === 'staff' ? (
+                      <>
+                        <div><p className="text-gray-400 text-xs">Annual Gross</p><p className="font-bold">₦{preview.annualGross?.toLocaleString()}</p></div>
+                        <div><p className="text-gray-400 text-xs">CRA Relief</p><p className="font-bold">₦{preview.cra?.toLocaleString()}</p></div>
+                        <div><p className="text-gray-400 text-xs">Monthly PAYE</p><p className="font-black" style={{ color: '#CC0000' }}>₦{preview.monthlyPAYE?.toLocaleString()}</p></div>
+                        <div><p className="text-gray-400 text-xs">Net Monthly Pay</p><p className="font-black">₦{preview.net_payable?.toLocaleString()}</p></div>
+                      </>
+                    ) : (
+                      <>
+                        <div><p className="text-gray-400 text-xs">WHT Rate</p><p className="font-bold">{(preview.whtRate * 100).toFixed(0)}%</p></div>
+                        <div><p className="text-gray-400 text-xs">WHT Deduction</p><p className="font-black" style={{ color: '#CC0000' }}>₦{preview.whtAmount?.toLocaleString()}</p></div>
+                        <div><p className="text-gray-400 text-xs">Net Payable</p><p className="font-black">₦{preview.netPayable?.toLocaleString()}</p></div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={saving}
+                  className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60 transition"
+                  style={{ background: '#CC0000' }}
+                  onMouseEnter={e => { if (!saving) e.currentTarget.style.background = '#AA0000' }}
+                  onMouseLeave={e => { if (!saving) e.currentTarget.style.background = '#CC0000' }}>
+                  {saving ? 'Saving…' : 'Save Entry'}
+                </button>
+                <button type="button" onClick={() => setShowForm(false)}
+                  className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
+                  style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       )}
 
       {/* Table */}

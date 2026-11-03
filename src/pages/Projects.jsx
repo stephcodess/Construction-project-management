@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Plus, FolderOpen, Calendar, DollarSign } from 'lucide-react'
+import { Plus, FolderOpen, Calendar, DollarSign, X } from 'lucide-react'
 import { format } from 'date-fns'
 
 const STATUS = {
@@ -54,63 +54,78 @@ export default function Projects() {
         )}
       </div>
 
-      {/* Form */}
+      {/* Modal */}
       {showForm && (
-        <form onSubmit={handleSave} className="bg-white rounded-2xl shadow-sm p-6 space-y-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
-            <h3 className="font-bold text-gray-900">New Project / Contract</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              { label: 'Project Name', key: 'name', type: 'text', required: true },
-              { label: 'Client',       key: 'client', type: 'text', required: true },
-              { label: 'Contract Value (₦)', key: 'contract_value', type: 'number' },
-              { label: 'Start Date',   key: 'start_date', type: 'date' },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">{f.label}</label>
-                <input
-                  type={f.type}
-                  required={f.required}
-                  value={form[f.key]}
-                  onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-                  className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none transition"
-                  onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'transparent'}
-                />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowForm(false) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
+                <h3 className="font-bold text-gray-900">New Project / Contract</h3>
               </div>
-            ))}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Status</label>
-              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
-                className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none">
-                <option value="active">Active</option>
-                <option value="completed">Completed</option>
-                <option value="on_hold">On Hold</option>
-              </select>
+              <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition">
+                <X className="w-5 h-5" />
+              </button>
             </div>
+            {/* Modal body */}
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  { label: 'Project Name', key: 'name', type: 'text', required: true },
+                  { label: 'Client', key: 'client', type: 'text', required: true },
+                  { label: 'Contract Value (₦)', key: 'contract_value', type: 'number' },
+                  { label: 'Start Date', key: 'start_date', type: 'date' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">{f.label}</label>
+                    <input
+                      type={f.type}
+                      required={f.required}
+                      value={form[f.key]}
+                      onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                      className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none transition"
+                      onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+                      onBlur={e => e.currentTarget.style.borderColor = 'transparent'}
+                    />
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Status</label>
+                  <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
+                    className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none">
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="on_hold">On Hold</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Description</label>
+                <textarea rows={3} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                  className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none resize-none"
+                  onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
+              </div>
+              {/* Modal footer */}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={saving}
+                  className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60 transition"
+                  style={{ background: '#CC0000' }}
+                  onMouseEnter={e => { if (!saving) e.currentTarget.style.background = '#AA0000' }}
+                  onMouseLeave={e => { if (!saving) e.currentTarget.style.background = '#CC0000' }}>
+                  {saving ? 'Saving…' : 'Save Project'}
+                </button>
+                <button type="button" onClick={() => setShowForm(false)}
+                  className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
+                  style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">Description</label>
-            <textarea rows={2} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-              className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none resize-none"
-              onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
-              onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
-          </div>
-          <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={saving}
-              className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60"
-              style={{ background: '#CC0000' }}>
-              {saving ? 'Saving…' : 'Save Project'}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)}
-              className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
-              style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
-              Cancel
-            </button>
-          </div>
-        </form>
+        </div>
       )}
 
       {/* Cards */}
