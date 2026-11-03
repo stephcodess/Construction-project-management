@@ -611,9 +611,393 @@ function ComplianceTab() {
 }
 
 // ════════════════════════════════════════════════════════════════
+// WHT TAB
+// ════════════════════════════════════════════════════════════════
+// Required SQL: CREATE TABLE IF NOT EXISTS wht_certificates (
+//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+//   client_name text NOT NULL, cert_number text, date_received date,
+//   taxable_amount numeric DEFAULT 0, wht_amount numeric NOT NULL,
+//   wht_rate text DEFAULT '5%', project_id uuid REFERENCES projects(id),
+//   notes text, claimed boolean DEFAULT false,
+//   claimed_at timestamptz, created_at timestamptz DEFAULT now()
+// );
+function WHTTab() {
+  const [subTab, setSubTab] = useState('Deductions Made')
+
+  // ── Deductions Made state ──────────────────────────────────────
+  const [deductions, setDeductions] = useState([])
+  const [deductMonth, setDeductMonth] = useState(format(new Date(), 'yyyy-MM'))
+
+  useEffect(() => { loadDeductions() }, [deductMonth])
+
+  async function loadDeductions() {
+    const start = `${deductMonth}-01`
+    const end = format(endOfMonth(new Date(deductMonth + '-01')), 'yyyy-MM-dd')
+    const { data } = await supabase.from('payroll_entries')
+      .select('*, projects(name)')
+      .eq('type', 'consultant')
+      .gte('period_start', start)
+      .lte('period_start', end)
+      .order('created_at', { ascending: false })
+    setDeductions(data ?? [])
+  }
+
+  const totalDeducted = deductions.reduce((s, e) => s + Number(e.wht_amount), 0)
+
+  // ── Certificates Received state ────────────────────────────────
+  const [certs, setCerts] = useState([])
+  const [showCertModal, setShowCertModal] = useState(false)
+  const [savingCert, setSavingCert] = useState(false)
+  const [certProjects, setCertProjects] = useState([])
+  const [certForm, setCertForm] = useState({
+    client_name: '', cert_number: '', date_received: '',
+    taxable_amount: '', wht_amount: '', wht_rate: '5%',
+    project_id: '', notes: '',
+  })
+
+  useEffect(() => { loadCerts() }, [])
+
+  async function loadCerts() {
+    const { data } = await supabase.from('wht_certificates')
+      .select('*, projects(name)')
+      .order('date_received', { ascending: false })
+    setCerts(data ?? [])
+  }
+
+  async function loadCertProjects() {
+    const { data } = await supabase.from('projects').select('id, name')
+    setCertProjects(data ?? [])
+  }
+
+  function openCertModal() {
+    loadCertProjects()
+    setShowCertModal(true)
+  }
+
+  async function handleCertSave(e) {
+    e.preventDefault()
+    setSavingCert(true)
+    await supabase.from('wht_certificates').insert([{
+      client_name: certForm.client_name,
+      cert_number: certForm.cert_number,
+      date_received: certForm.date_received || null,
+      taxable_amount: certForm.taxable_amount ? Number(certForm.taxable_amount) : 0,
+      wht_amount: Number(certForm.wht_amount),
+      wht_rate: certForm.wht_rate,
+      project_id: certForm.project_id || null,
+      notes: certForm.notes || null,
+      claimed: false,
+    }])
+    setSavingCert(false)
+    setShowCertModal(false)
+    setCertForm({ client_name: '', cert_number: '', date_received: '', taxable_amount: '', wht_amount: '', wht_rate: '5%', project_id: '', notes: '' })
+    loadCerts()
+  }
+
+  async function markClaimed(cert) {
+    await supabase.from('wht_certificates')
+      .update({ claimed: true, claimed_at: new Date().toISOString() })
+      .eq('id', cert.id)
+    loadCerts()
+  }
+
+  const totalCertValue = certs.reduce((s, c) => s + Number(c.wht_amount), 0)
+  const unclaimedCerts = certs.filter(c => !c.claimed)
+  const totalClaimable = unclaimedCerts.reduce((s, c) => s + Number(c.wht_amount), 0)
+
+  return (
+    <div className="space-y-6">
+      {/* Sub-tab pills */}
+      <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border w-fit" style={{ borderColor: '#E5E5E5' }}>
+        {['Deductions Made', 'Certificates Received'].map(t => (
+          <button key={t} onClick={() => setSubTab(t)}
+            className="px-4 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap"
+            style={{
+              background: subTab === t ? '#1C1C1C' : 'transparent',
+              color: subTab === t ? 'white' : '#888'
+            }}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Deductions Made ── */}
+      {subTab === 'Deductions Made' && (
+        <div className="space-y-6">
+          {/* Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <input type="month" value={deductMonth} onChange={e => setDeductMonth(e.target.value)}
+              className="border-2 border-transparent bg-white rounded-xl px-3.5 py-2 text-sm shadow-sm focus:outline-none"
+              onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+              onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
+          </div>
+
+          {/* KPI */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="rounded-2xl p-5" style={{ background: '#CC0000' }}>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/70 mb-1">Total WHT Deducted</p>
+              <p className="text-3xl font-black text-white">₦{totalDeducted.toLocaleString()}</p>
+            </div>
+            <div className="rounded-2xl p-5" style={{ background: '#1C1C1C' }}>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-1">Contractors / Suppliers</p>
+              <p className="text-3xl font-black text-white">{deductions.length}</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Pending Remittance</p>
+              <p className="text-3xl font-black" style={{ color: '#1C1C1C' }}>
+                {deductions.filter(e => !e.remitted).length}
+              </p>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
+              <h3 className="font-bold text-gray-900">WHT Deductions from Contractors</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead style={{ background: '#F9F9F9' }}>
+                  <tr className="text-xs text-gray-400 uppercase tracking-widest">
+                    {['Name', 'Project', 'Invoice Amt', 'WHT Rate', 'WHT Deducted', 'Net Paid', 'Status'].map((h, i) => (
+                      <th key={h} className={`px-5 py-3.5 font-semibold ${['Invoice Amt', 'WHT Deducted', 'Net Paid'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {deductions.length === 0 && (
+                    <tr><td colSpan={7} className="text-center py-12 text-gray-400 text-sm">No WHT deductions this month.</td></tr>
+                  )}
+                  {deductions.map(e => (
+                    <tr key={e.id} className="hover:bg-gray-50/50">
+                      <td className="px-5 py-3.5 font-bold text-gray-900">{e.name}</td>
+                      <td className="px-5 py-3.5 text-gray-500">{e.projects?.name ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-right">₦{Number(e.gross_amount).toLocaleString()}</td>
+                      <td className="px-5 py-3.5">
+                        <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white" style={{ background: '#CC0000' }}>
+                          {e.entity_type === 'company' ? '10%' : '5%'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-black" style={{ color: '#CC0000' }}>₦{Number(e.wht_amount).toLocaleString()}</td>
+                      <td className="px-5 py-3.5 text-right font-bold" style={{ color: '#1C1C1C' }}>₦{Number(e.net_payable).toLocaleString()}</td>
+                      <td className="px-5 py-3.5">
+                        {e.remitted ? (
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white" style={{ background: '#1C1C1C' }}>Remitted</span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white" style={{ background: '#F59E0B' }}>Pending</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {deductions.length > 0 && (
+                  <tfoot style={{ background: '#F9F9F9' }}>
+                    <tr>
+                      <td colSpan={4} className="px-5 py-3.5 text-right font-bold text-gray-700 text-sm">Total WHT to Remit:</td>
+                      <td className="px-5 py-3.5 text-right font-black text-base" style={{ color: '#CC0000' }}>₦{totalDeducted.toLocaleString()}</td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Certificates Received ── */}
+      {subTab === 'Certificates Received' && (
+        <div className="space-y-6">
+          {/* Controls */}
+          <div className="flex justify-end">
+            <button onClick={openCertModal}
+              className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition"
+              style={{ background: '#CC0000' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#AA0000'}
+              onMouseLeave={e => e.currentTarget.style.background = '#CC0000'}>
+              <Plus className="w-4 h-4" /> Add Certificate
+            </button>
+          </div>
+
+          {/* KPI cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="rounded-2xl p-5" style={{ background: '#1C1C1C' }}>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-1">Total Certificates</p>
+              <p className="text-3xl font-black text-white">{certs.length}</p>
+            </div>
+            <div className="rounded-2xl p-5" style={{ background: '#CC0000' }}>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/70 mb-1">Total WHT Value</p>
+              <p className="text-3xl font-black text-white">₦{totalCertValue.toLocaleString()}</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Unclaimed</p>
+              <p className="text-3xl font-black" style={{ color: '#F59E0B' }}>{unclaimedCerts.length}</p>
+              <p className="text-xs text-gray-400 mt-1">₦{totalClaimable.toLocaleString()} claimable</p>
+            </div>
+          </div>
+
+          {/* Certificates table */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
+              <h3 className="font-bold text-gray-900">WHT Certificates Received from Clients</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead style={{ background: '#F9F9F9' }}>
+                  <tr className="text-xs text-gray-400 uppercase tracking-widest">
+                    {['Date', 'Certificate #', 'Client / Payer', 'Project', 'WHT Rate', 'WHT Amount', 'Status', 'Actions'].map((h, i) => (
+                      <th key={h} className={`px-5 py-3.5 font-semibold ${h === 'WHT Amount' ? 'text-right' : 'text-left'}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {certs.length === 0 && (
+                    <tr><td colSpan={8} className="text-center py-12 text-gray-400 text-sm">No certificates recorded yet.</td></tr>
+                  )}
+                  {certs.map(c => (
+                    <tr key={c.id} className="hover:bg-gray-50/50">
+                      <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap">
+                        {c.date_received ? format(new Date(c.date_received), 'dd MMM yyyy') : '—'}
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-xs font-bold text-gray-700">{c.cert_number || '—'}</td>
+                      <td className="px-5 py-3.5 font-bold text-gray-900">{c.client_name}</td>
+                      <td className="px-5 py-3.5 text-gray-500">{c.projects?.name ?? '—'}</td>
+                      <td className="px-5 py-3.5">
+                        <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white" style={{ background: '#1C1C1C' }}>
+                          {c.wht_rate}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-black" style={{ color: '#CC0000' }}>₦{Number(c.wht_amount).toLocaleString()}</td>
+                      <td className="px-5 py-3.5">
+                        {c.claimed ? (
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white" style={{ background: '#1C1C1C' }}>Claimed</span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white" style={{ background: '#F59E0B' }}>Unclaimed</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {!c.claimed && (
+                          <button onClick={() => markClaimed(c)}
+                            className="text-xs font-bold underline"
+                            style={{ color: '#1C1C1C' }}>
+                            Mark Claimed
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {certs.length > 0 && (
+                  <tfoot style={{ background: '#F9F9F9' }}>
+                    <tr>
+                      <td colSpan={5} className="px-5 py-3.5 text-right font-bold text-gray-700 text-sm">
+                        Total claimable:
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-black text-base" style={{ color: '#CC0000' }}>
+                        ₦{totalClaimable.toLocaleString()}
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Certificate Modal ── */}
+      {showCertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowCertModal(false) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Dark gradient header */}
+            <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl sticky top-0"
+              style={{ background: 'linear-gradient(135deg, #1C1C1C 0%, #3a1a1a 100%)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
+                <h3 className="font-bold text-white">Add WHT Certificate</h3>
+              </div>
+              <button type="button" onClick={() => setShowCertModal(false)} className="text-white/60 hover:text-white transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCertSave} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <Field label="Client / Payer *">
+                    <SI type="text" required value={certForm.client_name}
+                      onChange={e => setCertForm(f => ({ ...f, client_name: e.target.value }))} />
+                  </Field>
+                </div>
+                <Field label="Certificate Number *">
+                  <SI type="text" required value={certForm.cert_number}
+                    onChange={e => setCertForm(f => ({ ...f, cert_number: e.target.value }))} />
+                </Field>
+                <Field label="Date Received *">
+                  <SI type="date" required value={certForm.date_received}
+                    onChange={e => setCertForm(f => ({ ...f, date_received: e.target.value }))} />
+                </Field>
+                <Field label="Taxable Amount (₦)">
+                  <SI type="number" min="0" step="0.01" value={certForm.taxable_amount}
+                    onChange={e => setCertForm(f => ({ ...f, taxable_amount: e.target.value }))} />
+                </Field>
+                <Field label="WHT Amount (₦) *">
+                  <SI type="number" required min="0" step="0.01" value={certForm.wht_amount}
+                    onChange={e => setCertForm(f => ({ ...f, wht_amount: e.target.value }))} />
+                </Field>
+                <Field label="WHT Rate">
+                  <SS value={certForm.wht_rate} onChange={e => setCertForm(f => ({ ...f, wht_rate: e.target.value }))}>
+                    <option value="5%">5%</option>
+                    <option value="10%">10%</option>
+                  </SS>
+                </Field>
+                <Field label="Project">
+                  <SS value={certForm.project_id} onChange={e => setCertForm(f => ({ ...f, project_id: e.target.value }))}>
+                    <option value="">— None —</option>
+                    {certProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </SS>
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Notes">
+                    <textarea value={certForm.notes}
+                      onChange={e => setCertForm(f => ({ ...f, notes: e.target.value }))}
+                      rows={3}
+                      className="w-full border-2 border-transparent bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none transition resize-none"
+                      onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
+                      onBlur={e => e.currentTarget.style.borderColor = 'transparent'} />
+                  </Field>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={savingCert}
+                  className="text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-60 transition"
+                  style={{ background: '#CC0000' }}
+                  onMouseEnter={e => { if (!savingCert) e.currentTarget.style.background = '#AA0000' }}
+                  onMouseLeave={e => { if (!savingCert) e.currentTarget.style.background = '#CC0000' }}>
+                  {savingCert ? 'Saving…' : 'Save Certificate'}
+                </button>
+                <button type="button" onClick={() => setShowCertModal(false)}
+                  className="border-2 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition"
+                  style={{ borderColor: '#E5E5E5', color: '#1C1C1C' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
 // MAIN TAX PAGE
 // ════════════════════════════════════════════════════════════════
-const TABS = ['VAT Returns', 'Payroll / WHT', 'Compliance']
+const TABS = ['VAT Returns', 'Payroll / WHT', 'WHT', 'Compliance']
 
 export default function Tax() {
   const [tab, setTab] = useState('VAT Returns')
@@ -643,6 +1027,7 @@ export default function Tax() {
 
       {tab === 'VAT Returns'   && <VATTab />}
       {tab === 'Payroll / WHT' && <PayrollTab />}
+      {tab === 'WHT'           && <WHTTab />}
       {tab === 'Compliance'    && <ComplianceTab />}
     </div>
   )

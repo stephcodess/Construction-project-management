@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Plus, X, Check, FolderOpen, Search, Upload, FileText, Pencil, Trash2, ChevronRight, ArrowRight } from 'lucide-react'
+import { Plus, X, Check, FolderOpen, Search, Upload, FileText, Pencil, Trash2, ChevronRight, ArrowRight, Receipt } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
+import { exportInvoicePDF, exportProjectPLPDF } from '../lib/pdf'
 
 // ── SVG Sparkline ────────────────────────────────────────────
 function Sparkline({ data, color = '#CC0000', width = 72, height = 28 }) {
@@ -78,11 +79,319 @@ function StatusBadge({ status }) {
   )
 }
 
+// ── Project P&L Report Modal ──────────────────────────────────
+function ProjectPLReport({ project, entries, onClose }) {
+  const fmt = v => `₦${Number(v).toLocaleString()}`
+
+  const estRev  = Number(project.estimated_revenue) || 0
+  const actRev  = Number(project.actual_revenue)    || 0
+  const estCost = Number(project.estimated_cost)    || 0
+  const actCost = Number(project.actual_cost)       || 0
+  const contractVal = Number(project.contract_value) || 0
+
+  const grossProfit   = actRev - actCost
+  const profitMargin  = actRev > 0 ? ((grossProfit / actRev) * 100).toFixed(1) : '0.0'
+  const budgetVariance = estCost - actCost  // positive = under budget
+
+  const revDelta  = actRev - estRev
+  const costDelta = actCost - estCost
+  const revBarPct  = estRev > 0 ? Math.min((actRev / estRev) * 100, 150) : 0
+  const costBarPct = estCost > 0 ? Math.min((actCost / estCost) * 100, 150) : 0
+
+  const allEntries = entries ?? []
+  const inflows  = allEntries.filter(e => e.type === 'income'  || e.type === 'receipt')
+  const outflows = allEntries.filter(e => e.type === 'expense' || e.type === 'payment')
+  const totalInflow  = inflows.reduce((s, e)  => s + (Number(e.amount || e.total_amount) || 0), 0)
+  const totalOutflow = outflows.reduce((s, e) => s + (Number(e.amount || e.total_amount) || 0), 0)
+  const netCash = totalInflow - totalOutflow
+
+  // Group payment/expense entries by category for AP breakdown
+  const categoryMap = {}
+  outflows.forEach(e => {
+    const cat = e.category || 'Uncategorised'
+    categoryMap[cat] = (categoryMap[cat] || 0) + (Number(e.amount || e.total_amount) || 0)
+  })
+  const categories = Object.entries(categoryMap)
+    .sort((a, b) => b[1] - a[1])
+  const maxCatVal = categories.length > 0 ? categories[0][1] : 1
+
+  function DeltaChip({ delta }) {
+    const pos = delta >= 0
+    return (
+      <span className="text-xs font-bold px-2 py-0.5 rounded-lg ml-2"
+        style={{ background: pos ? '#f0fdf4' : '#fff0f0', color: pos ? '#16a34a' : '#CC0000' }}>
+        {pos ? '+' : ''}{fmt(delta)}
+      </span>
+    )
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.65)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden">
+
+        {/* ── Header ── */}
+        <div className="relative flex items-start justify-between px-6 py-5 overflow-hidden shrink-0"
+          style={{ background: '#1C1C1C' }}>
+          {/* Decorative circles */}
+          <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-20" style={{ background: '#CC0000' }} />
+          <div className="absolute top-6 right-20 w-10 h-10 rounded-full opacity-10" style={{ background: '#CC0000' }} />
+          <div className="z-10">
+            <p className="text-xs font-bold tracking-widest uppercase mb-0.5" style={{ color: '#CC0000' }}>
+              {project.project_number ? `#${project.project_number}` : 'Project'} · {project.client || '—'}
+            </p>
+            <h3 className="font-black text-xl text-white leading-tight">{project.name}</h3>
+            <div className="mt-2"><StatusBadge status={project.status} /></div>
+          </div>
+          <div className="flex items-center gap-2 z-10 shrink-0">
+            <button
+              onClick={() => exportProjectPLPDF(project, allEntries)}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition"
+              style={{ borderColor: 'rgba(255,255,255,0.25)', color: 'white', background: 'rgba(255,255,255,0.08)' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.16)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+            >
+              <FileText className="w-3.5 h-3.5" /> Export P&L PDF
+            </button>
+            <button onClick={onClose} className="text-white/60 hover:text-white transition">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Scrollable body ── */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
+
+          {/* Section 1 — Financial Summary KPI cards */}
+          <section>
+            <p className="text-xs font-black uppercase tracking-widest mb-4" style={{ color: '#CC0000' }}>Financial Summary</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+              {/* Contract Value — dark card */}
+              <div className="rounded-2xl p-4" style={{ background: '#1C1C1C' }}>
+                <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-2">Contract Value</p>
+                <p className="text-xl font-black text-white leading-tight">{fmt(contractVal)}</p>
+              </div>
+
+              {/* Gross Profit */}
+              <div className="rounded-2xl p-4"
+                style={{ background: grossProfit >= 0 ? '#f0fdf4' : '#fff0f0' }}>
+                <p className="text-xs font-bold uppercase tracking-widest mb-2"
+                  style={{ color: grossProfit >= 0 ? '#16a34a' : '#CC0000', opacity: 0.7 }}>Gross Profit</p>
+                <p className="text-xl font-black leading-tight"
+                  style={{ color: grossProfit >= 0 ? '#16a34a' : '#CC0000' }}>{fmt(grossProfit)}</p>
+              </div>
+
+              {/* Profit Margin — white card */}
+              <div className="rounded-2xl p-4 border" style={{ borderColor: '#E5E5E5' }}>
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Profit Margin</p>
+                <p className="text-xl font-black leading-tight" style={{ color: '#1C1C1C' }}>{profitMargin}%</p>
+              </div>
+
+              {/* Budget Variance */}
+              <div className="rounded-2xl p-4"
+                style={{ background: budgetVariance >= 0 ? '#f0fdf4' : '#fff0f0' }}>
+                <p className="text-xs font-bold uppercase tracking-widest mb-2"
+                  style={{ color: budgetVariance >= 0 ? '#16a34a' : '#CC0000', opacity: 0.7 }}>Budget Variance</p>
+                <p className="text-xl font-black leading-tight"
+                  style={{ color: budgetVariance >= 0 ? '#16a34a' : '#CC0000' }}>
+                  {budgetVariance >= 0 ? '+' : ''}{fmt(budgetVariance)}
+                </p>
+                <p className="text-xs mt-1" style={{ color: budgetVariance >= 0 ? '#16a34a' : '#CC0000', opacity: 0.7 }}>
+                  {budgetVariance >= 0 ? 'Under budget' : 'Over budget'}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Section 2 — Revenue & Cost Breakdown */}
+          <section>
+            <p className="text-xs font-black uppercase tracking-widest mb-4" style={{ color: '#CC0000' }}>Revenue &amp; Cost Breakdown</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+              {/* Revenue Panel */}
+              <div className="rounded-2xl border p-5 space-y-3" style={{ borderColor: '#E5E5E5' }}>
+                <p className="text-xs font-black uppercase tracking-widest text-gray-500">Revenue</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Estimated Revenue</span>
+                    <span className="font-semibold" style={{ color: '#1C1C1C' }}>{fmt(estRev)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Actual Revenue</span>
+                    <div className="flex items-center">
+                      <span className="font-bold" style={{ color: '#1C1C1C' }}>{fmt(actRev)}</span>
+                      <DeltaChip delta={revDelta} />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Contract Value</span>
+                    <span className="font-semibold" style={{ color: '#1C1C1C' }}>{fmt(contractVal)}</span>
+                  </div>
+                </div>
+                {/* Bar */}
+                <div>
+                  <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                    <span>Actual vs Estimated</span>
+                    <span>{revBarPct.toFixed(0)}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-100">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(revBarPct, 100)}%`, background: '#CC0000' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Cost Panel */}
+              <div className="rounded-2xl border p-5 space-y-3" style={{ borderColor: '#E5E5E5' }}>
+                <p className="text-xs font-black uppercase tracking-widest text-gray-500">Cost</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Estimated Cost</span>
+                    <span className="font-semibold" style={{ color: '#1C1C1C' }}>{fmt(estCost)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Actual Cost</span>
+                    <div className="flex items-center">
+                      <span className="font-bold" style={{ color: '#1C1C1C' }}>{fmt(actCost)}</span>
+                      <DeltaChip delta={costDelta} />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Variance</span>
+                    <span className="font-bold" style={{ color: budgetVariance >= 0 ? '#16a34a' : '#CC0000' }}>
+                      {budgetVariance >= 0 ? '+' : ''}{fmt(budgetVariance)}
+                    </span>
+                  </div>
+                </div>
+                {/* Bar */}
+                <div>
+                  <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                    <span>Actual vs Estimated</span>
+                    <span>{costBarPct.toFixed(0)}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-100">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(costBarPct, 100)}%`, background: costDelta > 0 ? '#CC0000' : '#16a34a' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Section 3 — Journal Entries */}
+          <section>
+            <p className="text-xs font-black uppercase tracking-widest mb-4" style={{ color: '#CC0000' }}>Journal Entries</p>
+            {allEntries.length === 0 ? (
+              <div className="text-center py-10 rounded-xl bg-gray-50">
+                <FileText className="w-7 h-7 mx-auto mb-2 opacity-20 text-gray-400" />
+                <p className="text-sm text-gray-400">No journal entries linked to this project.</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border overflow-hidden" style={{ borderColor: '#E5E5E5' }}>
+                <table className="w-full text-sm">
+                  <thead style={{ background: '#F9FAFB' }}>
+                    <tr className="text-xs text-gray-400 uppercase tracking-widest">
+                      <th className="px-4 py-3 text-left font-semibold">Date</th>
+                      <th className="px-4 py-3 text-left font-semibold">Description</th>
+                      <th className="px-4 py-3 text-left font-semibold">Category</th>
+                      <th className="px-4 py-3 text-left font-semibold">Type</th>
+                      <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {allEntries.map(je => {
+                      const isIn = je.type === 'income' || je.type === 'receipt'
+                      return (
+                        <tr key={je.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
+                            {je.entry_date ? format(new Date(je.entry_date), 'dd MMM yyyy') : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 max-w-[180px] truncate">
+                            {je.description || je.notes || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 capitalize">{je.category || '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-lg"
+                              style={{
+                                background: isIn ? '#f0fdf4' : '#fff0f0',
+                                color: isIn ? '#16a34a' : '#CC0000'
+                              }}>
+                              {je.type || '—'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold" style={{ color: '#1C1C1C' }}>
+                            {fmt(Number(je.amount || je.total_amount) || 0)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  {/* Totals row */}
+                  <tfoot style={{ background: '#F9FAFB' }}>
+                    <tr className="text-xs font-black uppercase tracking-widest border-t" style={{ borderColor: '#E5E5E5' }}>
+                      <td className="px-4 py-3 text-gray-400" colSpan={3}>Totals</td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-400">Inflow</span>
+                            <span style={{ color: '#16a34a' }}>{fmt(totalInflow)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-400">Outflow</span>
+                            <span style={{ color: '#CC0000' }}>{fmt(totalOutflow)}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="font-black text-sm" style={{ color: netCash >= 0 ? '#16a34a' : '#CC0000' }}>
+                          {netCash >= 0 ? '+' : ''}{fmt(netCash)}
+                        </span>
+                        <p className="text-xs text-gray-400 font-normal normal-case tracking-normal">Net Cash</p>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Section 4 — Cash Flow by Category */}
+          {categories.length > 0 && (
+            <section>
+              <p className="text-xs font-black uppercase tracking-widest mb-4" style={{ color: '#CC0000' }}>Cash Flow by Category (Payments)</p>
+              <div className="rounded-2xl border p-5 space-y-4" style={{ borderColor: '#E5E5E5' }}>
+                {categories.map(([cat, val]) => {
+                  const barPct = (val / maxCatVal) * 100
+                  return (
+                    <div key={cat}>
+                      <div className="flex items-center justify-between text-sm mb-1.5">
+                        <span className="font-semibold capitalize" style={{ color: '#1C1C1C' }}>{cat}</span>
+                        <span className="font-black text-xs" style={{ color: '#CC0000' }}>{fmt(val)}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-100">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${barPct}%`, background: '#CC0000' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Project P&L Drawer ────────────────────────────────────────
 function PLDrawer({ project, onClose }) {
   const [journalEntries, setJournalEntries] = useState([])
   const [contractLetter, setContractLetter] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showPL, setShowPL] = useState(false)
 
   useEffect(() => {
     if (!project) return
@@ -164,9 +473,29 @@ function PLDrawer({ project, onClose }) {
             <h3 className="font-black text-lg leading-tight truncate" style={{ color: '#1C1C1C' }}>{project.name}</h3>
             <div className="mt-2"><StatusBadge status={project.status} /></div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition shrink-0 mt-0.5">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0 mt-0.5">
+            <button
+              onClick={() => exportInvoicePDF(project)}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition"
+              style={{ borderColor: '#CC0000', color: '#CC0000', background: '#FFF0F0' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#FFE0E0' }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#FFF0F0' }}
+            >
+              <Receipt className="w-3.5 h-3.5" /> Invoice
+            </button>
+            <button
+              onClick={() => setShowPL(true)}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition"
+              style={{ borderColor: '#E5E5E5', color: '#1C1C1C', background: 'white' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#CC0000'; e.currentTarget.style.color = '#CC0000' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E5E5'; e.currentTarget.style.color = '#1C1C1C' }}
+            >
+              <FileText className="w-3.5 h-3.5" /> P&amp;L Report
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable body */}
@@ -293,6 +622,14 @@ function PLDrawer({ project, onClose }) {
           )}
         </div>
       </div>
+
+      {showPL && (
+        <ProjectPLReport
+          project={project}
+          entries={journalEntries}
+          onClose={() => setShowPL(false)}
+        />
+      )}
     </>
   )
 }
