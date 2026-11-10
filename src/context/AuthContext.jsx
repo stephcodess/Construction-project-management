@@ -25,13 +25,20 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  async function fetchProfile(userId) {
+  async function fetchProfile(userId, attempt = 0) {
     const { data } = await supabase
       .from('profiles')
       .select('*, organisations(*)')
       .eq('id', userId)
       .single()
-    setProfile(data)
+
+    // Trigger may not have fired yet — retry up to 3 times with backoff
+    if (!data && attempt < 3) {
+      await new Promise(r => setTimeout(r, 600 * (attempt + 1)))
+      return fetchProfile(userId, attempt + 1)
+    }
+
+    setProfile(data ?? null)
     setOrganisation(data?.organisations ?? null)
     setLoading(false)
   }

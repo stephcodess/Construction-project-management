@@ -27,20 +27,27 @@ function ProtectedRoute({ children }) {
     </div>
   )
   if (!user) return <Navigate to="/login" replace />
-  // If logged in but no org yet, send to onboarding
-  if (profile && !profile.organisation_id) return <Navigate to="/onboarding" replace />
+  // If logged in but no org yet (profile null or no organisation_id), send to onboarding
+  if (!profile || !profile.organisation_id) return <Navigate to="/onboarding" replace />
   return <Layout>{children}</Layout>
 }
 
 function AppRoutes() {
-  const { user, loading } = useAuth()
-  if (loading) return null
+  const { user, profile, loading } = useAuth()
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#F0F2F8]">
+      <div className="text-gray-400 text-sm">Loading…</div>
+    </div>
+  )
 
   return (
     <Routes>
       <Route path="/login"      element={user ? <Navigate to="/projects" replace /> : <Login />} />
       <Route path="/signup"     element={user ? <Navigate to="/projects" replace /> : <Signup />} />
-      <Route path="/onboarding" element={!user ? <Navigate to="/login" replace /> : <Onboarding />} />
+      <Route path="/onboarding" element={
+        !user ? <Navigate to="/login" replace /> :
+        (profile?.organisation_id ? <Navigate to="/projects" replace /> : <Onboarding />)
+      } />
       <Route path="/invite/:token" element={<AcceptInvite />} />
       <Route path="/"          element={<Navigate to="/projects" replace />} />
       <Route path="/overview"  element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
