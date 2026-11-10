@@ -5,6 +5,7 @@ import { CompanyProvider } from './context/CompanyContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import Onboarding from './pages/Onboarding'
 import AcceptInvite from './pages/AcceptInvite'
 import Dashboard from './pages/Dashboard'
 import Projects from './pages/Projects'
@@ -19,13 +20,15 @@ import InvoicePublic from './pages/InvoicePublic'
 import Expenses from './pages/Expenses'
 
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#F0F2F8]">
       <div className="text-gray-400 text-sm">Loading…</div>
     </div>
   )
   if (!user) return <Navigate to="/login" replace />
+  // If logged in but no org yet, send to onboarding
+  if (profile && !profile.organisation_id) return <Navigate to="/onboarding" replace />
   return <Layout>{children}</Layout>
 }
 
@@ -35,8 +38,9 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login"     element={user ? <Navigate to="/projects" replace /> : <Login />} />
-      <Route path="/signup"    element={user ? <Navigate to="/projects" replace /> : <Signup />} />
+      <Route path="/login"      element={user ? <Navigate to="/projects" replace /> : <Login />} />
+      <Route path="/signup"     element={user ? <Navigate to="/projects" replace /> : <Signup />} />
+      <Route path="/onboarding" element={!user ? <Navigate to="/login" replace /> : <Onboarding />} />
       <Route path="/invite/:token" element={<AcceptInvite />} />
       <Route path="/"          element={<Navigate to="/projects" replace />} />
       <Route path="/overview"  element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

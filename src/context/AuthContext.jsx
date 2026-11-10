@@ -41,9 +41,8 @@ export function AuthProvider({ children }) {
     return { error }
   }
 
-  // Create account + organisation in one flow
-  async function signUp({ email, password, fullName, orgName }) {
-    // 1. Create auth user
+  // Create auth user + bare profile (org created during onboarding)
+  async function signUp({ email, password, fullName }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -52,9 +51,23 @@ export function AuthProvider({ children }) {
     if (error) return { error }
 
     const userId = data?.user?.id
-    if (!userId) return { error: new Error('Signup failed — no user ID returned.') }
+    if (!userId) return { error: null } // email confirmation required, no id yet
 
-    // 2. Create organisation
+    // Create bare profile — no org yet, assigned during onboarding
+    await supabase.from('profiles').upsert({
+      id: userId,
+      full_name: fullName,
+      email,
+      role: 'admin',
+    }, { onConflict: 'id' })
+
+    return { error: null }
+  }
+
+  // Called from Onboarding — creates org, links profile, creates company_settings
+  async function completeOnboarding({ orgName, companyDetails }) {
+    if (!user) return { error: new Error('Not authenticated') }
+
     const { data: orgData, error: orgErr } = await supabase
       .from('organisations')
       .insert({ name: orgName })
@@ -62,23 +75,20 @@ export function AuthProvider({ children }) {
       .single()
     if (orgErr) return { error: orgErr }
 
-    // 3. Create profile as admin of this org
     const { error: profileErr } = await supabase
       .from('profiles')
-      .upsert({
-        id: userId,
-        full_name: fullName,
-        email,
-        role: 'admin',
-        organisation_id: orgData.id,
-      }, { onConflict: 'id' })
+      .update({ organisation_id: orgData.id })
+      .eq('id', user.id)
     if (profileErr) return { error: profileErr }
 
-    // 4. Create company_settings row for the org
-    await supabase
-      .from('company_settings')
-      .insert({ organisation_id: orgData.id, name: orgName })
+    await supabase.from('company_settings').insert({
+      organisation_id: orgData.id,
+      name: orgName,
+      ...companyDetails,
+    })
 
+    // Refresh profile so the rest of the app sees organisation_id
+    await fetchProfile(user.id)
     return { error: null }
   }
 
@@ -87,7 +97,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, organisation, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, profile, organisation, loading, signIn, signUp, signOut, completeOnboarding }}>
       {children}
     </AuthContext.Provider>
   )

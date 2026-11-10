@@ -98,6 +98,10 @@ create policy "Members can read own org" on public.organisations
     )
   );
 
+-- Any authenticated user can create an org (once, during onboarding)
+create policy "Authenticated users can create org" on public.organisations
+  for insert with check (auth.uid() is not null);
+
 -- organisation_invites
 create policy "Admins can manage invites" on public.organisation_invites
   for all using (

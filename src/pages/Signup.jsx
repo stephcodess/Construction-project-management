@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Mail, Lock, Eye, EyeOff, User, Building2, ArrowRight, Check } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Check } from 'lucide-react'
 
 const RED  = '#CC0000'
 const DARK = '#1C1C1C'
@@ -45,9 +45,8 @@ function InputField({ label, icon: Icon, type = 'text', value, onChange, placeho
 
 export default function Signup() {
   const { signUp } = useAuth()
-  const navigate   = useNavigate()
 
-  const [form, setForm] = useState({ fullName: '', orgName: '', email: '', password: '' })
+  const [form, setForm] = useState({ fullName: '', email: '', password: '' })
   const [error,   setError]   = useState('')
   const [loading, setLoading] = useState(false)
   const [done,    setDone]    = useState(false)
@@ -64,7 +63,6 @@ export default function Signup() {
       email:    form.email,
       password: form.password,
       fullName: form.fullName,
-      orgName:  form.orgName,
     })
 
     if (error) {
@@ -117,7 +115,7 @@ export default function Signup() {
               <span style={{ color: RED }}>workspace.</span>
             </h1>
             <p className="text-gray-400 text-base leading-relaxed max-w-xs">
-              Create a free account for your organisation. Invite your team once you're in.
+              Create a free account. You'll set up your organisation in a quick onboarding after signing up.
             </p>
 
             <div className="mt-10 space-y-4">
@@ -196,16 +194,6 @@ export default function Signup() {
                   onChange={set('fullName')}
                   placeholder="e.g. Amara Okafor"
                   required
-                />
-
-                <InputField
-                  label="Organisation / Company Name *"
-                  icon={Building2}
-                  value={form.orgName}
-                  onChange={set('orgName')}
-                  placeholder="e.g. Okafor Construction Ltd"
-                  required
-                  hint="This creates your workspace. You can change it in Settings later."
                 />
 
                 <InputField
