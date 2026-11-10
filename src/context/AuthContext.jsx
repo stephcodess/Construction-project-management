@@ -41,27 +41,14 @@ export function AuthProvider({ children }) {
     return { error }
   }
 
-  // Create auth user + bare profile (org created during onboarding)
+  // Create auth user — the handle_new_user trigger creates the profile automatically
   async function signUp({ email, password, fullName }) {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: { data: { full_name: fullName, role: 'admin' } },
     })
-    if (error) return { error }
-
-    const userId = data?.user?.id
-    if (!userId) return { error: null } // email confirmation required, no id yet
-
-    // Create bare profile — no org yet, assigned during onboarding
-    await supabase.from('profiles').upsert({
-      id: userId,
-      full_name: fullName,
-      email,
-      role: 'admin',
-    }, { onConflict: 'id' })
-
-    return { error: null }
+    return { error: error ?? null }
   }
 
   // Called from Onboarding — creates org, links profile, creates company_settings
