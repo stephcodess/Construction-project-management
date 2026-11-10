@@ -182,7 +182,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="space-y-6">
 
       {/* Page header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
