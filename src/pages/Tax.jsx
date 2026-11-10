@@ -757,7 +757,8 @@ function WHTTab() {
   return (
     <div className="space-y-6">
       {/* Sub-tab pills */}
-      <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border w-fit" style={{ borderColor: '#E5E5E5' }}>
+      <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border w-max min-w-full" style={{ borderColor: '#E5E5E5' }}>
         {['Deductions Made', 'Certificates Received'].map(t => (
           <button key={t} onClick={() => setSubTab(t)}
             className="px-4 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap"
@@ -768,6 +769,7 @@ function WHTTab() {
             {t}
           </button>
         ))}
+      </div>
       </div>
 
       {/* ── Deductions Made ── */}
@@ -1057,7 +1059,7 @@ export default function Tax() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Finance</p>
           <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>
@@ -1068,17 +1070,19 @@ export default function Tax() {
           </h2>
         </div>
         {/* Tab bar */}
-        <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border" style={{ borderColor: '#E5E5E5' }}>
-          {TABS.map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className="px-4 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap"
-              style={{
-                background: tab === t ? '#1C1C1C' : 'transparent',
-                color: tab === t ? 'white' : '#888'
-              }}>
-              {t}
-            </button>
-          ))}
+        <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border w-max min-w-full" style={{ borderColor: '#E5E5E5' }}>
+            {TABS.map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className="px-4 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap"
+                style={{
+                  background: tab === t ? '#1C1C1C' : 'transparent',
+                  color: tab === t ? 'white' : '#888'
+                }}>
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
