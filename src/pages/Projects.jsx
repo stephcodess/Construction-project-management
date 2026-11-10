@@ -579,18 +579,18 @@ function PLDrawer({ project, onClose }) {
         style={{ width: 'min(480px, 100vw)', transition: 'transform 0.3s ease' }}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-5 border-b shrink-0" style={{ borderColor: '#F0F0F0' }}>
-          <div className="flex-1 min-w-0 pr-3">
+        <div className="flex items-start justify-between px-4 sm:px-6 py-4 sm:py-5 border-b shrink-0" style={{ borderColor: '#F0F0F0' }}>
+          <div className="flex-1 min-w-0 pr-2">
             <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>
               {project.project_number ? `#${project.project_number}` : 'Project'}
             </p>
             <h3 className="font-black text-lg leading-tight truncate" style={{ color: '#1C1C1C' }}>{project.name}</h3>
             <div className="mt-2"><StatusBadge status={project.status} /></div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 mt-0.5">
+          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 mt-0.5 ml-2">
             <button
               onClick={() => exportInvoicePDF(project)}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition"
+              className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded-lg border transition"
               style={{ borderColor: '#CC0000', color: '#CC0000', background: '#FFF0F0' }}
               onMouseEnter={e => { e.currentTarget.style.background = '#FFE0E0' }}
               onMouseLeave={e => { e.currentTarget.style.background = '#FFF0F0' }}
@@ -599,12 +599,12 @@ function PLDrawer({ project, onClose }) {
             </button>
             <button
               onClick={() => setShowPL(true)}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition"
+              className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded-lg border transition"
               style={{ borderColor: '#E5E5E5', color: '#1C1C1C', background: 'white' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#CC0000'; e.currentTarget.style.color = '#CC0000' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E5E5'; e.currentTarget.style.color = '#1C1C1C' }}
             >
-              <FileText className="w-3.5 h-3.5" /> P&amp;L Report
+              <FileText className="w-3.5 h-3.5" /> P&amp;L
             </button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
               <X className="w-5 h-5" />
@@ -613,7 +613,7 @@ function PLDrawer({ project, onClose }) {
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-6">
 
           {/* Details */}
           <section>
@@ -1165,7 +1165,7 @@ function AddProjectWizard({ onClose, onSaved }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.55)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>

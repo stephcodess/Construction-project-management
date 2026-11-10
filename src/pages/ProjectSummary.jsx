@@ -111,7 +111,7 @@ function SectionTitle({ icon: Icon, title, action }) {
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-white rounded-2xl shadow-sm p-6 ${className}`}
+    <div className={`bg-white rounded-2xl shadow-sm p-4 md:p-6 ${className}`}
       style={{ border: '1px solid #EBEBEB' }}>
       {children}
     </div>
@@ -528,7 +528,7 @@ function MilestoneModal({ projectId, milestone, onClose, onSaved }) {
           </div>
 
           {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-1.5">
                 Expected Date *
@@ -1272,7 +1272,7 @@ export default function ProjectSummary() {
           <SectionTitle icon={Activity} title="Project Details" />
           <div className="space-y-4">
             {/* Key details grid */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
                 { label: 'Project Number', value: project.project_number || '—' },
                 { label: 'Status',          value: <StatusBadge status={project.status} /> },

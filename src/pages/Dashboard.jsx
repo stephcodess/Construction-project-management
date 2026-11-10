@@ -133,7 +133,7 @@ function CashFlowChart({ months }) {
           </div>
         ))}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: `${H}px` }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 'auto', maxHeight: `${H}px`, minHeight: '100px' }}>
         <defs>
           <linearGradient id="inflowGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#CC0000" stopOpacity="0.12" />
@@ -300,7 +300,7 @@ function InvoiceSummaryBar({ invoices }) {
         </div>
         <span className="text-[10px] font-bold text-gray-400">{invoices.length} invoices</span>
       </div>
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
         {[
           { label: 'Total Billed', val: total,       dark: true },
           { label: 'Collected',    val: collected,    green: true },
@@ -531,7 +531,7 @@ export default function Dashboard() {
     <div className="space-y-5">
 
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-start sm:items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: '#CC0000' }}>
             {company?.name ?? 'Eldesign Construction'}
@@ -558,8 +558,8 @@ export default function Dashboard() {
       </div>
 
       {/* ── KPI row ── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <div className="col-span-2 md:col-span-1 xl:col-span-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="col-span-2 sm:col-span-3 xl:col-span-2">
           <KpiCard label="Net Cash Position" value={naira(kpi.netCash)}
             sub="All-time inflow minus outflow"
             icon={Banknote} variant="dark" />
@@ -586,10 +586,10 @@ export default function Dashboard() {
       )}
 
       {/* ── Chart + Activity Feed ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
 
         {/* Chart */}
-        <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm p-5">
+        <div className="md:col-span-3 bg-white rounded-2xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
@@ -607,7 +607,7 @@ export default function Dashboard() {
         </div>
 
         {/* Activity Feed */}
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm p-5 flex flex-col" style={{ maxHeight: '340px' }}>
+        <div className="md:col-span-2 bg-white rounded-2xl shadow-sm p-5 flex flex-col" style={{ maxHeight: '340px' }}>
           <div className="flex items-center justify-between mb-3 shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 rounded-full" style={{ background: '#CC0000' }} />
@@ -627,7 +627,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Projects + Tax + Recent Transactions ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
         {/* Active Projects */}
         <div className="bg-white rounded-2xl shadow-sm p-5">

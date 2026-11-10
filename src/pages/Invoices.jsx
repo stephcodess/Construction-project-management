@@ -339,7 +339,7 @@ function CreateInvoiceModal({ projects, defaultProjectId, company, onClose, onSa
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
 
       <div className="bg-white rounded-3xl shadow-2xl w-full flex flex-col overflow-hidden"
-        style={{ maxWidth: '1000px', height: 'min(94vh, 760px)' }}>
+        style={{ maxWidth: '1000px', height: 'min(96vh, 760px)' }}>
 
         {/* ── Top bar ── */}
         <div className="flex items-center justify-between px-6 py-4 shrink-0"
@@ -367,7 +367,7 @@ function CreateInvoiceModal({ projects, defaultProjectId, company, onClose, onSa
         <div className="flex flex-1 overflow-hidden">
 
           {/* LEFT — form */}
-          <div className="flex flex-col w-full md:w-[420px] shrink-0 overflow-hidden border-r" style={{ borderColor: '#F0F0F0' }}>
+          <div className="flex flex-col w-full md:w-[420px] shrink-0 overflow-hidden md:border-r" style={{ borderColor: '#F0F0F0' }}>
             <form onSubmit={handleSave} className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto px-6 py-5 space-y-7">
 
@@ -1113,7 +1113,7 @@ export default function Invoices() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 p-1 rounded-xl shadow-sm" style={{ background: 'white', border: '1px solid #EEEEEE' }}>
+        <div className="flex flex-wrap gap-1 p-1 rounded-xl shadow-sm" style={{ background: 'white', border: '1px solid #EEEEEE' }}>
           {FILTER_TABS.map(tab => (
             <button key={tab} onClick={() => { setStatusFilter(tab); setPage(1) }}
               className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"

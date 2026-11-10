@@ -710,7 +710,7 @@ function OverviewTab({ profile }) {
 
       {/* Monthly Timeline Table */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 border-b" style={{ borderColor: '#F0F0F0' }}>
           <h3 className="font-bold text-gray-900">Monthly Timeline</h3>
           <div className="flex items-center gap-2 flex-wrap">
             <input type="month" value={filter.month}
