@@ -1,24 +1,113 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import Pagination, { usePagination } from '../components/Pagination'
 import { supabase } from '../lib/supabase'
+import { logActivity } from '../lib/activity'
 import { useAuth } from '../context/AuthContext'
+import { useProject } from '../context/ProjectContext'
 import { computeVAT } from '../lib/taxRules'
 import { exportJournalPDF } from '../lib/pdf'
 import { format, endOfMonth, subMonths, startOfMonth } from 'date-fns'
 import { Plus, Download, Search, X, TrendingUp, TrendingDown, DollarSign, Paperclip, FileText, Pencil, Trash2 } from 'lucide-react'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   'Contract Revenue', 'Labour Cost', 'Materials', 'Equipment Hire',
   'Professional Fees', 'Transport', 'Office Expenses', 'Bank Charges',
   'Tax Payment', 'Other'
 ]
 
+function useExtendableList(storageKey, defaults) {
+  const [list, setList] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const extra = JSON.parse(saved)
+        const merged = [...defaults]
+        extra.forEach(item => { if (!merged.includes(item)) merged.push(item) })
+        return merged
+      }
+    } catch {}
+    return defaults
+  })
+
+  function addItem(item) {
+    const trimmed = item.trim()
+    if (!trimmed || list.includes(trimmed)) return
+    const newList = [...list, trimmed]
+    setList(newList)
+    try {
+      const extra = newList.filter(i => !defaults.includes(i))
+      localStorage.setItem(storageKey, JSON.stringify(extra))
+    } catch {}
+  }
+
+  return [list, addItem]
+}
+
+function AddOptionInline({ onAdd }) {
+  const [open, setOpen] = useState(false)
+  const [val, setVal] = useState('')
+  const inputRef = useRef(null)
+
+  function handleOpen(e) {
+    e.preventDefault()
+    setOpen(true)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  function handleConfirm(e) {
+    e.preventDefault()
+    if (val.trim()) { onAdd(val); setVal('') }
+    setOpen(false)
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); handleConfirm(e) }
+    if (e.key === 'Escape') { setOpen(false); setVal('') }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={handleOpen}
+        className="flex items-center gap-1 text-xs font-semibold transition"
+        style={{ color: '#CC0000' }}>
+        <Plus className="w-3 h-3" /> Add
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="New option…"
+        className="border rounded-lg px-2 py-0.5 text-xs w-28 focus:outline-none"
+        style={{ borderColor: '#CC0000' }}
+      />
+      <button type="button" onClick={handleConfirm}
+        className="text-xs font-bold px-2 py-0.5 rounded-lg text-white"
+        style={{ background: '#CC0000' }}>
+        OK
+      </button>
+      <button type="button" onClick={() => { setOpen(false); setVal('') }}
+        className="text-xs text-gray-400 hover:text-gray-600">
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  )
+}
+
 // ── Helpers ──────────────────────────────────────────────────
-function Field({ label, children }) {
+function Field({ label, children, onAddOption }) {
   return (
     <div>
-      <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">{label}</label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs font-bold uppercase tracking-widest text-gray-500">{label}</label>
+        {onAddOption && <AddOptionInline onAdd={onAddOption} />}
+      </div>
       {children}
     </div>
   )
@@ -131,10 +220,11 @@ function CashMovementChart({ monthlyData }) {
 }
 
 // ── Add Entry Modal ───────────────────────────────────────────
-function AddEntryModal({ projects, onClose, onSaved }) {
+function AddEntryModal({ projects, defaultProjectId = '', onClose, onSaved }) {
+  const [categories, addCategory] = useExtendableList('journal_categories', DEFAULT_CATEGORIES)
   const [form, setForm] = useState({
     date: format(new Date(), 'yyyy-MM-dd'), type: 'receipt', description: '',
-    category: 'Contract Revenue', amount: '', project_id: '', vat_applicable: false,
+    category: 'Contract Revenue', amount: '', project_id: defaultProjectId, vat_applicable: false,
   })
   const [saving, setSaving] = useState(false)
   const [vatPreview, setVatPreview] = useState(null)
@@ -181,6 +271,7 @@ function AddEntryModal({ projects, onClose, onSaved }) {
     }
 
     setSaving(false)
+    logActivity({ action: 'journal_entry', entity_type: 'journal', entity_name: form.description || form.type, meta: { amount: Number(form.amount), type: form.type } })
     onSaved()
     onClose()
   }
@@ -208,9 +299,9 @@ function AddEntryModal({ projects, onClose, onSaved }) {
                 <option value="payment">Payment</option>
               </Select>
             </Field>
-            <Field label="Category *">
+            <Field label="Category *" onAddOption={item => { addCategory(item); setForm(f => ({ ...f, category: item.trim() || f.category })) }}>
               <Select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                {categories.map(c => <option key={c}>{c}</option>)}
               </Select>
             </Field>
             <Field label="Project">
@@ -302,6 +393,7 @@ function AddEntryModal({ projects, onClose, onSaved }) {
 
 // ── Edit Entry Modal ─────────────────────────────────────────
 function EditEntryModal({ entry, projects, onClose, onSaved }) {
+  const [categories, addCategory] = useExtendableList('journal_categories', DEFAULT_CATEGORIES)
   const [form, setForm] = useState({
     date: entry.date ?? format(new Date(), 'yyyy-MM-dd'),
     type: entry.type ?? 'receipt',
@@ -400,9 +492,9 @@ function EditEntryModal({ entry, projects, onClose, onSaved }) {
                 ))}
               </div>
             </Field>
-            <Field label="Category *">
+            <Field label="Category *" onAddOption={item => { addCategory(item); setForm(f => ({ ...f, category: item.trim() || f.category })) }}>
               <Select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                {categories.map(c => <option key={c}>{c}</option>)}
               </Select>
             </Field>
             <Field label="Project">
@@ -509,6 +601,7 @@ function EditEntryModal({ entry, projects, onClose, onSaved }) {
 
 // ── Overview Tab ─────────────────────────────────────────────
 function OverviewTab({ profile }) {
+  const { activeProject } = useProject()
   const [entries, setEntries] = useState([])
   const [projects, setProjects] = useState([])
   const [monthlyData, setMonthlyData] = useState([])
@@ -517,14 +610,16 @@ function OverviewTab({ profile }) {
   const [editingEntry, setEditingEntry] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
 
-  useEffect(() => { loadEntries(); loadProjects(); loadMonthlyData() }, [filter.month])
+  useEffect(() => { loadEntries(); loadProjects(); loadMonthlyData() }, [filter.month, activeProject?.id])
 
   async function loadEntries() {
     const start = `${filter.month}-01`
     const end = format(endOfMonth(new Date(filter.month + '-01')), 'yyyy-MM-dd')
-    const { data } = await supabase
+    let q = supabase
       .from('journal_entries').select('*, projects(name)')
       .gte('date', start).lte('date', end).order('date', { ascending: false })
+    if (activeProject) q = q.eq('project_id', activeProject.id)
+    const { data } = await q
     setEntries(data ?? [])
   }
 
@@ -534,7 +629,9 @@ function OverviewTab({ profile }) {
   }
 
   async function loadMonthlyData() {
-    const { data } = await supabase.from('journal_entries').select('date, type, amount').order('date')
+    let q = supabase.from('journal_entries').select('date, type, amount').order('date')
+    if (activeProject) q = q.eq('project_id', activeProject.id)
+    const { data } = await q
     if (!data) return
     const now = new Date()
     const months = Array.from({ length: 6 }, (_, i) => {
@@ -568,19 +665,21 @@ function OverviewTab({ profile }) {
   const totalAR = filtered.filter(e => e.type === 'receipt').reduce((s, e) => s + Number(e.amount), 0)
   const totalAP = filtered.filter(e => e.type === 'payment').reduce((s, e) => s + Number(e.amount), 0)
 
-  // Beginning cash = sum of all entries before this month
+  // Beginning cash = sum of all entries before this month (scoped to active project)
   const [beginCash, setBeginCash] = useState(0)
   useEffect(() => {
     async function loadBegin() {
       const beforeDate = `${filter.month}-01`
-      const { data } = await supabase.from('journal_entries').select('type, amount').lt('date', beforeDate)
+      let q = supabase.from('journal_entries').select('type, amount').lt('date', beforeDate)
+      if (activeProject) q = q.eq('project_id', activeProject.id)
+      const { data } = await q
       if (!data) return
       const r = data.filter(e => e.type === 'receipt').reduce((s, e) => s + Number(e.amount), 0)
       const p = data.filter(e => e.type === 'payment').reduce((s, e) => s + Number(e.amount), 0)
       setBeginCash(r - p)
     }
     loadBegin()
-  }, [filter.month])
+  }, [filter.month, activeProject?.id])
 
   return (
     <div className="space-y-6">
@@ -736,7 +835,7 @@ function OverviewTab({ profile }) {
       </div>
 
       {showModal && (
-        <AddEntryModal projects={projects} onClose={() => setShowModal(false)} onSaved={() => { loadEntries(); loadMonthlyData() }} />
+        <AddEntryModal projects={projects} defaultProjectId={activeProject?.id ?? ''} onClose={() => setShowModal(false)} onSaved={() => { loadEntries(); loadMonthlyData() }} />
       )}
       {editingEntry && (
         <EditEntryModal entry={editingEntry} projects={projects}
@@ -877,6 +976,7 @@ const TABS = ['Overview', 'Forecast']
 
 export default function Journal() {
   const { profile } = useAuth()
+  const { activeProject } = useProject()
   const [tab, setTab] = useState('Overview')
 
   return (
@@ -885,7 +985,12 @@ export default function Journal() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Ledger</p>
-          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>Cash Flow</h2>
+          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>
+            Cash Flow
+            {activeProject && (
+              <span className="text-base font-semibold ml-2" style={{ color: '#888' }}>— {activeProject.name}</span>
+            )}
+          </h2>
         </div>
         {/* Tab switcher */}
         <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border" style={{ borderColor: '#E5E5E5' }}>

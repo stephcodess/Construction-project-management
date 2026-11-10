@@ -1,15 +1,104 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Plus, X, Users, Shield, UserCheck, AlertTriangle } from 'lucide-react'
 import { format } from 'date-fns'
 import Pagination, { usePagination } from '../components/Pagination'
 
+const DEFAULT_ROLES = ['staff', 'accountant', 'admin']
+
+function useExtendableList(storageKey, defaults) {
+  const [list, setList] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const extra = JSON.parse(saved)
+        const merged = [...defaults]
+        extra.forEach(item => { if (!merged.includes(item)) merged.push(item) })
+        return merged
+      }
+    } catch {}
+    return defaults
+  })
+
+  function addItem(item) {
+    const trimmed = item.trim()
+    if (!trimmed || list.includes(trimmed)) return
+    const newList = [...list, trimmed]
+    setList(newList)
+    try {
+      const extra = newList.filter(i => !defaults.includes(i))
+      localStorage.setItem(storageKey, JSON.stringify(extra))
+    } catch {}
+  }
+
+  return [list, addItem]
+}
+
+function AddOptionInline({ onAdd }) {
+  const [open, setOpen] = useState(false)
+  const [val, setVal] = useState('')
+  const inputRef = useRef(null)
+
+  function handleOpen(e) {
+    e.preventDefault()
+    setOpen(true)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  function handleConfirm(e) {
+    e.preventDefault()
+    if (val.trim()) { onAdd(val); setVal('') }
+    setOpen(false)
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); handleConfirm(e) }
+    if (e.key === 'Escape') { setOpen(false); setVal('') }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={handleOpen}
+        className="flex items-center gap-1 text-xs font-semibold transition"
+        style={{ color: '#CC0000' }}>
+        <Plus className="w-3 h-3" /> Add
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="New option…"
+        className="border rounded-lg px-2 py-0.5 text-xs w-28 focus:outline-none"
+        style={{ borderColor: '#CC0000' }}
+      />
+      <button type="button" onClick={handleConfirm}
+        className="text-xs font-bold px-2 py-0.5 rounded-lg text-white"
+        style={{ background: '#CC0000' }}>
+        OK
+      </button>
+      <button type="button" onClick={() => { setOpen(false); setVal('') }}
+        className="text-xs text-gray-400 hover:text-gray-600">
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  )
+}
+
 // ── Helpers ───────────────────────────────────────────────────
-function Field({ label, children }) {
+function Field({ label, children, onAddOption }) {
   return (
     <div>
-      <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">{label}</label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs font-bold uppercase tracking-widest text-gray-500">{label}</label>
+        {onAddOption && <AddOptionInline onAdd={onAddOption} />}
+      </div>
       {children}
     </div>
   )
@@ -39,7 +128,6 @@ function SelectInput({ children, ...props }) {
   )
 }
 
-const ROLE_OPTIONS = ['staff', 'accountant', 'admin']
 
 function roleBadge(role) {
   if (role === 'admin')
@@ -62,6 +150,7 @@ function getInitial(name) {
 
 // ── Invite Member Modal ───────────────────────────────────────
 function InviteModal({ onClose, onSaved }) {
+  const [roles, addRole] = useExtendableList('team_roles', DEFAULT_ROLES)
   const [form, setForm] = useState({ full_name: '', email: '', role: 'staff', password: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -172,11 +261,11 @@ function InviteModal({ onClose, onSaved }) {
             />
           </Field>
 
-          <Field label="Role">
+          <Field label="Role" onAddOption={item => { addRole(item); set('role', item.trim() || form.role) }}>
             <SelectInput value={form.role} onChange={e => set('role', e.target.value)}>
-              <option value="staff">Staff</option>
-              <option value="accountant">Accountant</option>
-              <option value="admin">Admin</option>
+              {roles.map(r => (
+                <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+              ))}
             </SelectInput>
           </Field>
 
@@ -219,6 +308,7 @@ function InviteModal({ onClose, onSaved }) {
 
 // ── Members Table Row ─────────────────────────────────────────
 function MemberRow({ member, currentUserId, isAdmin, onRoleChange, onRemove }) {
+  const [roles] = useExtendableList('team_roles', DEFAULT_ROLES)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [roleChanging, setRoleChanging] = useState(false)
@@ -298,7 +388,7 @@ function MemberRow({ member, currentUserId, isAdmin, onRoleChange, onRemove }) {
               onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
               onBlur={e => e.currentTarget.style.borderColor = 'transparent'}
             >
-              {ROLE_OPTIONS.map(r => (
+              {roles.map(r => (
                 <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
               ))}
             </select>

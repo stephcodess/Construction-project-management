@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Pagination, { usePagination } from '../components/Pagination'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useProject } from '../context/ProjectContext'
 import { computePAYE, computeWHT } from '../lib/taxRules'
 import { exportVATPDF } from '../lib/pdf'
 import { exportPayrollPDF } from '../lib/pdf'
@@ -37,17 +38,21 @@ function SS({ children, ...props }) {
 // VAT TAB
 // ════════════════════════════════════════════════════════════════
 function VATTab() {
+  const { activeProject } = useProject()
   const [entries, setEntries] = useState([])
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [vatReturns, setVatReturns] = useState([])
 
-  useEffect(() => { loadData() }, [month])
+  useEffect(() => { loadData() }, [month, activeProject?.id])
 
   async function loadData() {
     const start = `${month}-01`
     const end = format(endOfMonth(new Date(month + '-01')), 'yyyy-MM-dd')
+    let journalQ = supabase.from('journal_entries').select('*, projects(name)')
+      .gte('date', start).lte('date', end).eq('vat_applicable', true)
+    if (activeProject) journalQ = journalQ.eq('project_id', activeProject.id)
     const [journalRes, returnsRes] = await Promise.all([
-      supabase.from('journal_entries').select('*, projects(name)').gte('date', start).lte('date', end).eq('vat_applicable', true),
+      journalQ,
       supabase.from('vat_returns').select('*').order('period', { ascending: false }),
     ])
     setEntries(journalRes.data ?? [])
@@ -89,6 +94,18 @@ function VATTab() {
           </button>
         </div>
       </div>
+
+      {/* Project scope notice */}
+      {activeProject && (
+        <div className="flex items-start gap-2 px-4 py-3 rounded-xl text-xs border"
+          style={{ background: '#FFF5F5', borderColor: '#FECACA', color: '#991B1B' }}>
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: '#CC0000' }} />
+          <span>
+            VAT transactions shown for <strong>{activeProject.name}</strong> only.
+            VAT filing history below is company-wide.
+          </span>
+        </div>
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -222,6 +239,7 @@ function VATTab() {
 // ════════════════════════════════════════════════════════════════
 function PayrollTab() {
   const { profile } = useAuth()
+  const { activeProject } = useProject()
   const [entries, setEntries] = useState([])
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [showModal, setShowModal] = useState(false)
@@ -230,12 +248,19 @@ function PayrollTab() {
   const [preview, setPreview] = useState(null)
   const [projects, setProjects] = useState([])
 
-  useEffect(() => { loadEntries(); loadProjects() }, [month])
+  useEffect(() => { loadEntries(); loadProjects() }, [month, activeProject?.id])
+
+  // Pre-fill project when active project changes
+  useEffect(() => {
+    setForm(f => ({ ...f, project_id: activeProject?.id ?? '' }))
+  }, [activeProject?.id])
 
   async function loadEntries() {
     const start = `${month}-01`
-    const { data } = await supabase.from('payroll_entries').select('*, projects(name)')
+    let q = supabase.from('payroll_entries').select('*, projects(name)')
       .gte('period_start', start).lte('period_start', start).order('created_at', { ascending: false })
+    if (activeProject) q = q.eq('project_id', activeProject.id)
+    const { data } = await q
     setEntries(data ?? [])
   }
   async function loadProjects() {
@@ -1019,6 +1044,7 @@ function WHTTab() {
 const TABS = ['VAT Returns', 'Payroll / WHT', 'WHT', 'Compliance']
 
 export default function Tax() {
+  const { activeProject } = useProject()
   const [tab, setTab] = useState('VAT Returns')
 
   return (
@@ -1027,7 +1053,12 @@ export default function Tax() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color: '#CC0000' }}>Finance</p>
-          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>Tax & Compliance</h2>
+          <h2 className="text-2xl font-black" style={{ color: '#1C1C1C' }}>
+            Tax & Compliance
+            {activeProject && (
+              <span className="text-base font-semibold ml-2" style={{ color: '#888' }}>— {activeProject.name}</span>
+            )}
+          </h2>
         </div>
         {/* Tab bar */}
         <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border" style={{ borderColor: '#E5E5E5' }}>

@@ -1,11 +1,15 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Pagination, { usePagination } from '../components/Pagination'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Plus, X, Check, FolderOpen, Search, Upload, FileText, Pencil, Trash2, ChevronRight, ArrowRight, Receipt } from 'lucide-react'
-import { format, subMonths } from 'date-fns'
+import { useProject } from '../context/ProjectContext'
+import { Plus, X, Check, FolderOpen, Search, Upload, FileText, Pencil, Trash2, ChevronRight, ArrowRight, Receipt, LayoutDashboard, Flag } from 'lucide-react'
+import { format, subMonths, differenceInDays } from 'date-fns'
 import { exportInvoicePDF, exportProjectPLPDF } from '../lib/pdf'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
+import { logActivity } from '../lib/activity'
+import InfoTooltip from '../components/InfoTooltip'
 
 // ── SVG Sparkline ────────────────────────────────────────────
 function Sparkline({ data, color = '#CC0000', width = 72, height = 28 }) {
@@ -46,11 +50,103 @@ function MiniBar({ data, color = '#8896B3', width = 72, height = 28 }) {
   )
 }
 
+const DEFAULT_STATUSES = ['active', 'completed', 'on_hold']
+
+function useExtendableList(storageKey, defaults) {
+  const [list, setList] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const extra = JSON.parse(saved)
+        const merged = [...defaults]
+        extra.forEach(item => { if (!merged.includes(item)) merged.push(item) })
+        return merged
+      }
+    } catch {}
+    return defaults
+  })
+
+  function addItem(item) {
+    const trimmed = item.trim()
+    if (!trimmed || list.includes(trimmed)) return
+    const newList = [...list, trimmed]
+    setList(newList)
+    try {
+      const extra = newList.filter(i => !defaults.includes(i))
+      localStorage.setItem(storageKey, JSON.stringify(extra))
+    } catch {}
+  }
+
+  return [list, addItem]
+}
+
+function AddOptionInline({ onAdd }) {
+  const [open, setOpen] = useState(false)
+  const [val, setVal] = useState('')
+  const inputRef = useRef(null)
+
+  function handleOpen(e) {
+    e.preventDefault()
+    setOpen(true)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  function handleConfirm(e) {
+    e.preventDefault()
+    if (val.trim()) { onAdd(val); setVal('') }
+    setOpen(false)
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); handleConfirm(e) }
+    if (e.key === 'Escape') { setOpen(false); setVal('') }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={handleOpen}
+        className="flex items-center gap-1 text-xs font-semibold transition"
+        style={{ color: '#CC0000' }}>
+        <Plus className="w-3 h-3" /> Add
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="New option…"
+        className="border rounded-lg px-2 py-0.5 text-xs w-28 focus:outline-none"
+        style={{ borderColor: '#CC0000' }}
+      />
+      <button type="button" onClick={handleConfirm}
+        className="text-xs font-bold px-2 py-0.5 rounded-lg text-white"
+        style={{ background: '#CC0000' }}>
+        OK
+      </button>
+      <button type="button" onClick={() => { setOpen(false); setVal('') }}
+        className="text-xs text-gray-400 hover:text-gray-600">
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  )
+}
+
 // ── Field / Input helpers ────────────────────────────────────
-function Field({ label, children }) {
+function Field({ label, children, onAddOption, info }) {
   return (
     <div>
-      <label className="block text-xs font-bold uppercase tracking-widest mb-1.5 text-gray-500">{label}</label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="flex items-center text-xs font-bold uppercase tracking-widest text-gray-500">
+          {label}
+          {info && <InfoTooltip text={info} />}
+        </label>
+        {onAddOption && <AddOptionInline onAdd={onAddOption} />}
+      </div>
       {children}
     </div>
   )
@@ -174,7 +270,7 @@ function ProjectPLReport({ project, entries, onClose }) {
 
               {/* Contract Value — dark card */}
               <div className="rounded-2xl p-4" style={{ background: '#1C1C1C' }}>
-                <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-2">Contract Value</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-2">Contract Sum</p>
                 <p className="text-xl font-black text-white leading-tight">{fmt(contractVal)}</p>
               </div>
 
@@ -182,14 +278,14 @@ function ProjectPLReport({ project, entries, onClose }) {
               <div className="rounded-2xl p-4"
                 style={{ background: grossProfit >= 0 ? '#f0fdf4' : '#fff0f0' }}>
                 <p className="text-xs font-bold uppercase tracking-widest mb-2"
-                  style={{ color: grossProfit >= 0 ? '#16a34a' : '#CC0000', opacity: 0.7 }}>Gross Profit</p>
+                  style={{ color: grossProfit >= 0 ? '#16a34a' : '#CC0000', opacity: 0.7 }}>Gross Margin</p>
                 <p className="text-xl font-black leading-tight"
                   style={{ color: grossProfit >= 0 ? '#16a34a' : '#CC0000' }}>{fmt(grossProfit)}</p>
               </div>
 
               {/* Profit Margin — white card */}
               <div className="rounded-2xl p-4 border" style={{ borderColor: '#E5E5E5' }}>
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Profit Margin</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Net Margin %</p>
                 <p className="text-xl font-black leading-tight" style={{ color: '#1C1C1C' }}>{profitMargin}%</p>
               </div>
 
@@ -197,7 +293,7 @@ function ProjectPLReport({ project, entries, onClose }) {
               <div className="rounded-2xl p-4"
                 style={{ background: budgetVariance >= 0 ? '#f0fdf4' : '#fff0f0' }}>
                 <p className="text-xs font-bold uppercase tracking-widest mb-2"
-                  style={{ color: budgetVariance >= 0 ? '#16a34a' : '#CC0000', opacity: 0.7 }}>Budget Variance</p>
+                  style={{ color: budgetVariance >= 0 ? '#16a34a' : '#CC0000', opacity: 0.7 }}>Cost Variance</p>
                 <p className="text-xl font-black leading-tight"
                   style={{ color: budgetVariance >= 0 ? '#16a34a' : '#CC0000' }}>
                   {budgetVariance >= 0 ? '+' : ''}{fmt(budgetVariance)}
@@ -219,11 +315,11 @@ function ProjectPLReport({ project, entries, onClose }) {
                 <p className="text-xs font-black uppercase tracking-widest text-gray-500">Revenue</p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Estimated Revenue</span>
+                    <span className="text-gray-500">Budgeted Revenue</span>
                     <span className="font-semibold" style={{ color: '#1C1C1C' }}>{fmt(estRev)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Actual Revenue</span>
+                    <span className="text-gray-500">Recognised Revenue</span>
                     <div className="flex items-center">
                       <span className="font-bold" style={{ color: '#1C1C1C' }}>{fmt(actRev)}</span>
                       <DeltaChip delta={revDelta} />
@@ -251,11 +347,11 @@ function ProjectPLReport({ project, entries, onClose }) {
                 <p className="text-xs font-black uppercase tracking-widest text-gray-500">Cost</p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Estimated Cost</span>
+                    <span className="text-gray-500">Budgeted Cost</span>
                     <span className="font-semibold" style={{ color: '#1C1C1C' }}>{fmt(estCost)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Actual Cost</span>
+                    <span className="text-gray-500">Cost to Date</span>
                     <div className="flex items-center">
                       <span className="font-bold" style={{ color: '#1C1C1C' }}>{fmt(actCost)}</span>
                       <DeltaChip delta={costDelta} />
@@ -388,10 +484,20 @@ function ProjectPLReport({ project, entries, onClose }) {
   )
 }
 
+// ── Milestone status colors (mini) ───────────────────────────
+const MS_DOT = {
+  pending:     '#9CA3AF',
+  in_progress: '#3B82F6',
+  completed:   '#22C55E',
+  delayed:     '#CC0000',
+}
+
 // ── Project P&L Drawer ────────────────────────────────────────
 function PLDrawer({ project, onClose }) {
+  const navigate = useNavigate()
   const [journalEntries, setJournalEntries] = useState([])
   const [contractLetter, setContractLetter] = useState(null)
+  const [milestones,     setMilestones]     = useState([])
   const [loading, setLoading] = useState(true)
   const [showPL, setShowPL] = useState(false)
 
@@ -407,6 +513,12 @@ function PLDrawer({ project, onClose }) {
       setLoading(false)
     })
   }, [project])
+
+  useEffect(() => {
+    if (!project?.id) return
+    supabase.from('milestones').select('*').eq('project_id', project.id).order('sort_order')
+      .then(({ data }) => setMilestones(data ?? []))
+  }, [project?.id])
 
   if (!project) return null
 
@@ -454,10 +566,10 @@ function PLDrawer({ project, onClose }) {
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — respects live sidebar width via CSS variable */}
       <div
-        className="fixed inset-0 z-30"
-        style={{ background: 'rgba(0,0,0,0.35)' }}
+        className="fixed top-0 bottom-0 right-0 z-30"
+        style={{ left: 'var(--sidebar-w, 64px)', background: 'rgba(0,0,0,0.35)' }}
         onClick={onClose}
       />
 
@@ -561,6 +673,168 @@ function PLDrawer({ project, onClose }) {
             </div>
           </section>
 
+          {/* Budget Tracker */}
+          <section>
+            <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: '#CC0000' }}>Budget Tracker</p>
+            {(() => {
+              const contractVal = Number(project.contract_value) || 0
+              const costBudget  = estCost
+              const costSpent   = actCost
+              const revTarget   = estRev
+              const revEarned   = actRev
+
+              const costPct    = costBudget > 0 ? Math.min((costSpent / costBudget) * 100, 150) : 0
+              const revPct     = revTarget  > 0 ? Math.min((revEarned / revTarget) * 100, 150) : 0
+              const overBudget = costSpent > costBudget && costBudget > 0
+              const profitPct  = contractVal > 0 ? ((actProfit / contractVal) * 100) : 0
+
+              function Gauge({ label, spent, budget, pct, overBudget: ob, inverse }) {
+                const clampPct = Math.min(pct, 100)
+                const color = ob ? '#CC0000' : pct >= 90 ? '#D97706' : '#16A34A'
+                return (
+                  <div className="rounded-xl p-4" style={{ background: ob ? '#FFF5F5' : '#F9FAFB', border: `1px solid ${ob ? '#FECACA' : '#F0F0F0'}` }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-gray-500">{label}</span>
+                      <span className="text-xs font-black px-2 py-0.5 rounded-md"
+                        style={{ background: ob ? '#FFF0F0' : pct >= 90 ? '#FFFBEB' : '#F0FDF4', color }}>
+                        {pct.toFixed(0)}%{ob ? ' OVER' : ''}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-2">
+                      <div className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${clampPct}%`, background: color }} />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>₦{Number(spent).toLocaleString()}</span>
+                      <span className="font-semibold">of ₦{Number(budget).toLocaleString()}</span>
+                    </div>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="space-y-3">
+                  <Gauge
+                    label="Cost Budget"
+                    spent={costSpent} budget={costBudget > 0 ? costBudget : 1}
+                    pct={costPct} overBudget={overBudget}
+                  />
+                  <Gauge
+                    label="Revenue Target"
+                    spent={revEarned} budget={revTarget > 0 ? revTarget : 1}
+                    pct={revPct} overBudget={false}
+                  />
+
+                  {/* Summary chips */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="rounded-xl p-3 text-center" style={{ background: actProfit >= 0 ? '#F0FDF4' : '#FFF5F5' }}>
+                      <p className="text-xs text-gray-400 mb-0.5">Net Profit</p>
+                      <p className="text-base font-black" style={{ color: actProfit >= 0 ? '#16A34A' : '#CC0000' }}>
+                        {actProfit >= 0 ? '+' : ''}₦{Math.abs(actProfit).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-xl p-3 text-center" style={{ background: '#F9FAFB' }}>
+                      <p className="text-xs text-gray-400 mb-0.5">Margin</p>
+                      <p className="text-base font-black" style={{ color: profitPct >= 15 ? '#16A34A' : profitPct >= 0 ? '#D97706' : '#CC0000' }}>
+                        {profitPct.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+
+                  {overBudget && (
+                    <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl text-xs"
+                      style={{ background: '#FFF0F0', border: '1px solid #FECACA', color: '#991B1B' }}>
+                      <span className="font-black shrink-0">⚠</span>
+                      <span>Project is <strong>₦{(costSpent - costBudget).toLocaleString()} over</strong> the cost budget.</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+          </section>
+
+          {/* Milestones mini-summary */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-black uppercase tracking-widest" style={{ color: '#CC0000' }}>Milestones</p>
+              <button
+                onClick={() => navigate(`/projects/${project.id}`)}
+                className="text-xs font-bold flex items-center gap-1 hover:opacity-70 transition"
+                style={{ color: '#CC0000' }}>
+                View all milestones →
+              </button>
+            </div>
+            {milestones.length === 0 ? (
+              <div className="text-center py-6 rounded-xl bg-gray-50">
+                <Flag className="w-6 h-6 mx-auto mb-2 opacity-20 text-gray-400" />
+                <p className="text-xs text-gray-400">No milestones added yet</p>
+              </div>
+            ) : (() => {
+              const completedCount = milestones.filter(m => m.status === 'completed').length
+              const total = milestones.length
+              const pct   = total > 0 ? Math.round((completedCount / total) * 100) : 0
+              const upcoming = milestones
+                .filter(m => m.status !== 'completed')
+                .sort((a, b) => (a.expected_date ?? '') < (b.expected_date ?? '') ? -1 : 1)
+                .slice(0, 3)
+
+              return (
+                <>
+                  {/* Progress bar */}
+                  <div className="mb-3">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-gray-500 font-medium">{completedCount} of {total} completed</span>
+                      <span className="font-bold" style={{ color: '#1C1C1C' }}>{pct}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full overflow-hidden" style={{ background: '#F0F0F0' }}>
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%`, background: '#22C55E' }} />
+                    </div>
+                  </div>
+
+                  {/* Next milestones */}
+                  <div className="space-y-2">
+                    {upcoming.map(m => {
+                      const daysLeft = m.expected_date
+                        ? differenceInDays(new Date(m.expected_date), new Date())
+                        : null
+                      const isOverdue = daysLeft !== null && daysLeft < 0
+                      return (
+                        <div key={m.id}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                          style={{ background: '#F9FAFB', border: '1px solid #F0F0F0' }}>
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ background: MS_DOT[m.status] ?? '#9CA3AF' }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold truncate" style={{ color: '#1C1C1C' }}>{m.name}</p>
+                            {m.expected_date && (
+                              <p className="text-[10px] text-gray-400">
+                                {format(new Date(m.expected_date), 'dd MMM yyyy')}
+                                {daysLeft !== null && (
+                                  <span className="ml-1.5 font-bold"
+                                    style={{ color: isOverdue ? '#CC0000' : daysLeft <= 7 ? '#D97706' : '#6B7280' }}>
+                                    {isOverdue ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? 'Today' : `${daysLeft}d left`}
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                            style={{
+                              background: MS_DOT[m.status] + '20',
+                              color: MS_DOT[m.status] ?? '#9CA3AF',
+                            }}>
+                            {m.status?.replace('_', ' ') ?? ''}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )
+            })()}
+          </section>
+
           {/* Cash Flow */}
           <section>
             <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: '#CC0000' }}>Cash Flow / Journal Entries</p>
@@ -638,6 +912,7 @@ function PLDrawer({ project, onClose }) {
 
 // ── Edit Project Modal ────────────────────────────────────────
 function EditProjectModal({ project, onClose, onSaved }) {
+  const [statuses, addStatus] = useExtendableList('project_statuses', DEFAULT_STATUSES)
   const [form, setForm] = useState({
     project_number:    project.project_number    ?? '',
     name:              project.name              ?? '',
@@ -673,6 +948,7 @@ function EditProjectModal({ project, onClose, onSaved }) {
     }
     const { error: err } = await supabase.from('projects').update(payload).eq('id', project.id)
     if (err) { setError(err.message); setSaving(false); return }
+    logActivity({ action: 'project_updated', entity_type: 'project', entity_id: project.id, entity_name: form.name, meta: { status: form.status } })
     setSaving(false)
     onSaved()
     onClose()
@@ -720,7 +996,7 @@ function EditProjectModal({ project, onClose, onSaved }) {
             <Field label="Client">
               <Input value={form.client} onChange={e => set('client', e.target.value)} placeholder="Client Name" />
             </Field>
-            <Field label="Contract Value (₦)">
+            <Field label="Contract Sum (₦)" info="The total amount agreed in the signed contract with the client. This is the ceiling value for the project.">
               <Input type="number" min="0" value={form.contract_value} onChange={e => set('contract_value', e.target.value)} />
             </Field>
             <Field label="Start Date">
@@ -735,19 +1011,19 @@ function EditProjectModal({ project, onClose, onSaved }) {
             <Field label="Location">
               <Input value={form.location} onChange={e => set('location', e.target.value)} placeholder="Site Location" />
             </Field>
-            <Field label="Estimated Revenue (₦)">
+            <Field label="Budgeted Revenue (₦)" info="The revenue you planned to earn on this project. Used as the benchmark to measure actual performance against.">
               <Input type="number" min="0" value={form.estimated_revenue} onChange={e => set('estimated_revenue', e.target.value)} />
             </Field>
-            <Field label="Actual Revenue (₦)">
+            <Field label="Recognised Revenue (₦)" info="Revenue actually earned or received to date. Update this as the client pays or as project stages are completed.">
               <Input type="number" min="0" value={form.actual_revenue} onChange={e => set('actual_revenue', e.target.value)} />
             </Field>
-            <Field label="Estimated Cost (₦)">
+            <Field label="Budgeted Cost (₦)" info="Your total planned spend to deliver this project — materials, labour, equipment, subcontractors etc. This is your cost budget.">
               <Input type="number" min="0" value={form.estimated_cost} onChange={e => set('estimated_cost', e.target.value)} />
             </Field>
-            <Field label="Actual Cost (₦)">
+            <Field label="Cost to Date (₦)" info="Total costs actually incurred on the project so far. Compare against Budgeted Cost to track whether you are over or under budget.">
               <Input type="number" min="0" value={form.actual_cost} onChange={e => set('actual_cost', e.target.value)} />
             </Field>
-            <Field label="Status">
+            <Field label="Status" onAddOption={item => { addStatus(item); set('status', item.trim() || form.status) }}>
               <select value={form.status} onChange={e => set('status', e.target.value)}
                 className={inputCls}
                 onFocus={e => e.currentTarget.style.borderColor = '#CC0000'}
@@ -755,6 +1031,9 @@ function EditProjectModal({ project, onClose, onSaved }) {
                 <option value="active">Active</option>
                 <option value="completed">Completed</option>
                 <option value="on_hold">Pending</option>
+                {statuses.filter(s => !DEFAULT_STATUSES.includes(s)).map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
             </Field>
           </div>
@@ -812,6 +1091,7 @@ const EMPTY_FORM = {
 }
 
 function AddProjectWizard({ onClose, onSaved }) {
+  const [statuses, addStatus] = useExtendableList('project_statuses', DEFAULT_STATUSES)
   const [step, setStep] = useState(1)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -873,6 +1153,7 @@ function AddProjectWizard({ onClose, onSaved }) {
       }
     }
 
+    logActivity({ action: 'project_created', entity_type: 'project', entity_id: inserted?.id ?? null, entity_name: form.name, meta: { status: form.status, contract_value: Number(form.contract_value) || null } })
     setSaving(false)
     onSaved()
     onClose()
@@ -956,31 +1237,38 @@ function AddProjectWizard({ onClose, onSaved }) {
 
           {/* Step 3 — Status */}
           {step === 3 && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
-              {[
-                { value: 'active',    label: 'Active',    desc: 'Currently in progress' },
-                { value: 'completed', label: 'Completed', desc: 'Work is finished' },
-                { value: 'on_hold',   label: 'Pending',   desc: 'Not yet started or paused' },
-              ].map(opt => (
-                <button key={opt.value} type="button"
-                  onClick={() => set('status', opt.value)}
-                  className="p-5 rounded-2xl border-2 text-left transition-all"
-                  style={{
-                    borderColor: form.status === opt.value ? '#CC0000' : '#E5E5E5',
-                    background: form.status === opt.value ? '#FFF0F0' : 'white'
-                  }}>
-                  <div className="w-3 h-3 rounded-full mb-3"
-                    style={{ background: STATUS_CFG[opt.value].bg }} />
-                  <p className="font-black text-sm" style={{ color: '#1C1C1C' }}>{opt.label}</p>
-                  <p className="text-xs text-gray-400 mt-1">{opt.desc}</p>
-                  {form.status === opt.value && (
-                    <div className="mt-3 flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5" style={{ color: '#CC0000' }} />
-                      <span className="text-xs font-bold" style={{ color: '#CC0000' }}>Selected</span>
-                    </div>
-                  )}
-                </button>
-              ))}
+            <div className="space-y-4 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { value: 'active',    label: 'Active',    desc: 'Currently in progress' },
+                  { value: 'completed', label: 'Completed', desc: 'Work is finished' },
+                  { value: 'on_hold',   label: 'Pending',   desc: 'Not yet started or paused' },
+                  ...statuses.filter(s => !DEFAULT_STATUSES.includes(s)).map(s => ({ value: s, label: s, desc: 'Custom status' })),
+                ].map(opt => (
+                  <button key={opt.value} type="button"
+                    onClick={() => set('status', opt.value)}
+                    className="p-5 rounded-2xl border-2 text-left transition-all"
+                    style={{
+                      borderColor: form.status === opt.value ? '#CC0000' : '#E5E5E5',
+                      background: form.status === opt.value ? '#FFF0F0' : 'white'
+                    }}>
+                    <div className="w-3 h-3 rounded-full mb-3"
+                      style={{ background: STATUS_CFG[opt.value]?.bg ?? '#888' }} />
+                    <p className="font-black text-sm" style={{ color: '#1C1C1C' }}>{opt.label}</p>
+                    <p className="text-xs text-gray-400 mt-1">{opt.desc}</p>
+                    {form.status === opt.value && (
+                      <div className="mt-3 flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5" style={{ color: '#CC0000' }} />
+                        <span className="text-xs font-bold" style={{ color: '#CC0000' }}>Selected</span>
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">Add custom status:</span>
+                <AddOptionInline onAdd={item => { addStatus(item); set('status', item.trim() || form.status) }} />
+              </div>
             </div>
           )}
 
@@ -1141,6 +1429,8 @@ const FILTER_TABS = ['All', 'Active', 'Completed', 'Pending']
 
 export default function Projects() {
   const { profile } = useAuth()
+  const { activeProject, setActiveProject } = useProject()
+  const navigate = useNavigate()
   const [projects, setProjects] = useState([])
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
@@ -1151,6 +1441,12 @@ export default function Projects() {
   const now = new Date()
 
   useEffect(() => { loadProjects() }, [])
+
+  // Only close the drawer if activeProject is cleared externally (e.g. sidebar deselect).
+  // Never auto-open on mount — the user must click a row to open it.
+  useEffect(() => {
+    if (!activeProject) setSelectedProject(null)
+  }, [activeProject?.id])
 
   async function loadProjects() {
     const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
@@ -1166,6 +1462,7 @@ export default function Projects() {
     }
     setConfirmDelete(null)
     if (selectedProject?.id === id) setSelectedProject(null)
+    if (activeProject?.id === id) setActiveProject(null)
     loadProjects()
   }
 
@@ -1204,7 +1501,7 @@ export default function Projects() {
   useEffect(() => { setPage(1) }, [filter, search])
 
   const isAdmin = profile?.role === 'admin'
-  const colSpan = isAdmin ? 10 : 9
+  const colSpan = 10
 
   return (
     <div className="space-y-6">
@@ -1240,6 +1537,31 @@ export default function Projects() {
           )}
         </div>
       </div>
+
+      {/* Active project banner */}
+      {activeProject && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border"
+          style={{ background: '#FFF5F5', borderColor: '#FECACA' }}>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: '#CC0000' }} />
+            <span className="text-sm font-semibold truncate" style={{ color: '#1C1C1C' }}>
+              Viewing across all tabs:
+            </span>
+            <span className="text-sm font-black truncate" style={{ color: '#CC0000' }}>
+              {activeProject.name}
+            </span>
+          </div>
+          <button
+            onClick={() => setActiveProject(null)}
+            className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg border transition"
+            style={{ borderColor: '#FECACA', color: '#CC0000', background: 'white' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#FFF0F0' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'white' }}
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1300,8 +1622,8 @@ export default function Projects() {
           <table className="w-full text-sm">
             <thead style={{ background: '#F9FAFB' }}>
               <tr className="text-xs text-gray-400 uppercase tracking-widest">
-                {['#', 'Project Name', 'Client', 'Est. Revenue', 'Actual Revenue', 'Est. Cost', 'Actual Cost', 'Net Profit', 'Status', ...(isAdmin ? ['Actions'] : [])].map(h => (
-                  <th key={h} className={`px-5 py-3.5 font-semibold ${['Est. Revenue','Actual Revenue','Est. Cost','Actual Cost','Net Profit'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+                {['#', 'Project Name', 'Client', 'Budgeted Rev.', 'Recognised Rev.', 'Budgeted Cost', 'Cost to Date', 'Gross Margin', 'Status', 'Actions'].map(h => (
+                  <th key={h} className={`px-5 py-3.5 font-semibold ${['Budgeted Rev.','Recognised Rev.','Budgeted Cost','Cost to Date','Gross Margin'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1325,7 +1647,7 @@ export default function Projects() {
                 return (
                   <tr
                     key={p.id}
-                    onClick={() => setSelectedProject(p)}
+                    onClick={() => { setSelectedProject(p); setActiveProject(p) }}
                     className="hover:bg-gray-50/60 transition-colors cursor-pointer relative"
                     style={isSelected ? { background: '#FFF8F8' } : {}}
                   >
@@ -1350,24 +1672,32 @@ export default function Projects() {
                       ₦{net.toLocaleString()}
                     </td>
                     <td className="px-5 py-3.5"><StatusBadge status={p.status} /></td>
-                    {isAdmin && (
-                      <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setEditingProject(p)}
-                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition"
-                            title="Edit project">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setConfirmDelete(p.id)}
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition"
-                            title="Delete project">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    )}
+                    <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { setActiveProject(p); navigate(`/projects/${p.id}`) }}
+                          className="p-1.5 rounded-lg transition text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                          title="View full summary">
+                          <LayoutDashboard className="w-4 h-4" />
+                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={() => setEditingProject(p)}
+                              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition"
+                              title="Edit project">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(p.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition"
+                              title="Delete project">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 )
               })}
