@@ -58,28 +58,22 @@ export function AuthProvider({ children }) {
     return { error: error ?? null }
   }
 
-  // Called from Onboarding — creates org, links profile, creates company_settings
+  // Called from Onboarding — calls a security-definer RPC that bypasses RLS
   async function completeOnboarding({ orgName, companyDetails }) {
     if (!user) return { error: new Error('Not authenticated') }
 
-    const { data: orgData, error: orgErr } = await supabase
-      .from('organisations')
-      .insert({ name: orgName })
-      .select()
-      .single()
-    if (orgErr) return { error: orgErr }
-
-    const { error: profileErr } = await supabase
-      .from('profiles')
-      .update({ organisation_id: orgData.id })
-      .eq('id', user.id)
-    if (profileErr) return { error: profileErr }
-
-    await supabase.from('company_settings').insert({
-      organisation_id: orgData.id,
-      name: orgName,
-      ...companyDetails,
+    const { error } = await supabase.rpc('create_organisation', {
+      org_name:       orgName,
+      p_email:        companyDetails.email        || null,
+      p_phone:        companyDetails.phone        || null,
+      p_address:      companyDetails.address      || null,
+      p_rc_number:    companyDetails.rc_number    || null,
+      p_tin:          companyDetails.tin          || null,
+      p_bank_name:    companyDetails.bank_name    || null,
+      p_account_name: companyDetails.account_name || null,
+      p_account_number: companyDetails.account_number || null,
     })
+    if (error) return { error }
 
     // Refresh profile so the rest of the app sees organisation_id
     await fetchProfile(user.id)
