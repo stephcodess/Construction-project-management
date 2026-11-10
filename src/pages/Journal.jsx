@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { logActivity } from '../lib/activity'
 import { useAuth } from '../context/AuthContext'
 import { useProject } from '../context/ProjectContext'
+import { useOrgId } from '../lib/useOrgId'
 import { computeVAT } from '../lib/taxRules'
 import { exportJournalPDF } from '../lib/pdf'
 import { format, endOfMonth, subMonths, startOfMonth } from 'date-fns'
@@ -221,6 +222,7 @@ function CashMovementChart({ monthlyData }) {
 
 // ── Add Entry Modal ───────────────────────────────────────────
 function AddEntryModal({ projects, defaultProjectId = '', onClose, onSaved }) {
+  const orgId = useOrgId()
   const [categories, addCategory] = useExtendableList('journal_categories', DEFAULT_CATEGORIES)
   const [form, setForm] = useState({
     date: format(new Date(), 'yyyy-MM-dd'), type: 'receipt', description: '',
@@ -255,6 +257,7 @@ function AddEntryModal({ projects, defaultProjectId = '', onClose, onSaved }) {
       ...form, amount: Number(form.amount),
       vat_amount: vat?.vatAmount ?? 0,
       project_id: form.project_id || null,
+      organisation_id: orgId,
     }]).select().single()
 
     if (receiptFile && inserted) {

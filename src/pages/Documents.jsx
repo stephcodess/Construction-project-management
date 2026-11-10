@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { logActivity } from '../lib/activity'
 import { useAuth } from '../context/AuthContext'
 import { useProject } from '../context/ProjectContext'
+import { useOrgId } from '../lib/useOrgId'
 import { format } from 'date-fns'
 import {
   Upload, FileText, Trash2, Download, Search, X, FolderOpen, File,
@@ -101,6 +102,7 @@ function TypeBadge({ type }) {
 
 // ── Upload Modal ──────────────────────────────────────────────
 function UploadModal({ projects, defaultProjectId, onClose, onSaved }) {
+  const orgId = useOrgId()
   const [file, setFile]       = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [form, setForm]       = useState({
@@ -132,13 +134,14 @@ function UploadModal({ projects, defaultProjectId, onClose, onSaved }) {
 
     const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path)
     const { error: dbErr } = await supabase.from('project_documents').insert([{
-      project_id:  form.project_id,
-      doc_type:    form.doc_type,
-      description: form.description.trim() || null,
-      file_name:   file.name,
-      file_path:   path,
-      file_url:    publicUrl,
-      file_size:   file.size,
+      project_id:      form.project_id,
+      doc_type:        form.doc_type,
+      description:     form.description.trim() || null,
+      file_name:       file.name,
+      file_path:       path,
+      file_url:        publicUrl,
+      file_size:       file.size,
+      organisation_id: orgId,
     }])
 
     setSaving(false)

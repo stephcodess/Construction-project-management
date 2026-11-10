@@ -4,6 +4,7 @@ import Pagination, { usePagination } from '../components/Pagination'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useProject } from '../context/ProjectContext'
+import { useOrgId } from '../lib/useOrgId'
 import { Plus, X, Check, FolderOpen, Search, Upload, FileText, Pencil, Trash2, ChevronRight, ArrowRight, Receipt, LayoutDashboard, Flag } from 'lucide-react'
 import { format, subMonths, differenceInDays } from 'date-fns'
 import { exportInvoicePDF, exportProjectPLPDF } from '../lib/pdf'
@@ -1091,6 +1092,7 @@ const EMPTY_FORM = {
 }
 
 function AddProjectWizard({ onClose, onSaved }) {
+  const orgId = useOrgId()
   const [statuses, addStatus] = useExtendableList('project_statuses', DEFAULT_STATUSES)
   const [step, setStep] = useState(1)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -1132,6 +1134,7 @@ function AddProjectWizard({ onClose, onSaved }) {
       actual_revenue:     Number(form.actual_revenue)     || null,
       estimated_cost:     Number(form.estimated_cost)     || null,
       actual_cost:        Number(form.actual_cost)        || null,
+      organisation_id:    orgId,
     }
     const { data: inserted, error: err } = await supabase.from('projects').insert([payload]).select().single()
     if (err) { setError(err.message); setSaving(false); return }
@@ -1149,6 +1152,7 @@ function AddProjectWizard({ onClose, onSaved }) {
           file_path: path,
           file_url: publicUrl,
           file_size: contractFile.size,
+          organisation_id: orgId,
         }])
       }
     }

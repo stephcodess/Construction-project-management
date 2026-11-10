@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useProject } from '../context/ProjectContext'
+import { useOrgId } from '../lib/useOrgId'
 import { useCompany } from '../context/CompanyContext'
 import { logActivity } from '../lib/activity'
 import { format, addDays, isPast, isToday } from 'date-fns'
@@ -236,6 +237,7 @@ function InvoicePreview({ form, items, projects, lineSubtotal, discountAmt, subt
 
 // ── Create Invoice Modal ──────────────────────────────────────
 function CreateInvoiceModal({ projects, defaultProjectId, company, onClose, onSaved }) {
+  const orgId = useOrgId()
   const [form, setForm] = useState({
     project_id:     defaultProjectId || '',
     invoice_date:   format(new Date(), 'yyyy-MM-dd'),
@@ -317,14 +319,15 @@ function CreateInvoiceModal({ projects, defaultProjectId, company, onClose, onSa
       discount_pct:   Number(form.discount) || 0,
       subtotal,
       vat_amount:     vatAmt,
-      total_amount:   total,
-      amount_paid:    0,
-      status:         'draft',
-      notes:          form.notes.trim() || null,
-      payment_terms:  form.payment_terms.trim() || null,
-      bank_name:      form.bank_name.trim() || null,
-      account_name:   form.account_name.trim() || null,
-      account_number: form.account_number.trim() || null,
+      total_amount:    total,
+      amount_paid:     0,
+      status:          'draft',
+      notes:           form.notes.trim() || null,
+      payment_terms:   form.payment_terms.trim() || null,
+      bank_name:       form.bank_name.trim() || null,
+      account_name:    form.account_name.trim() || null,
+      account_number:  form.account_number.trim() || null,
+      organisation_id: orgId,
     }])
 
     setSaving(false)
@@ -573,6 +576,7 @@ function CreateInvoiceModal({ projects, defaultProjectId, company, onClose, onSa
 
 // ── Record Payment Modal ──────────────────────────────────────
 function RecordPaymentModal({ invoice, onClose, onSaved }) {
+  const orgId = useOrgId()
   const remaining = Number(invoice.total_amount) - Number(invoice.amount_paid ?? 0)
   const paidPct   = Number(invoice.total_amount) > 0
     ? Math.min((Number(invoice.amount_paid ?? 0) / Number(invoice.total_amount)) * 100, 100) : 0
@@ -599,11 +603,12 @@ function RecordPaymentModal({ invoice, onClose, onSaved }) {
     const [, payErr] = await Promise.all([
       supabase.from('invoices').update({ amount_paid: newPaid, status: newStatus }).eq('id', invoice.id),
       supabase.from('invoice_payments').insert([{
-        invoice_id:   invoice.id,
-        payment_date: form.payment_date,
-        amount:       amt,
-        method:       form.method,
-        reference:    form.reference.trim() || null,
+        invoice_id:      invoice.id,
+        payment_date:    form.payment_date,
+        amount:          amt,
+        method:          form.method,
+        reference:       form.reference.trim() || null,
+        organisation_id: orgId,
       }]).then(({ error }) => error),
     ])
 

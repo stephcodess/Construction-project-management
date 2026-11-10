@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 
@@ -135,7 +135,14 @@ export default function Login() {
 
           {/* Heading */}
           <h2 className="text-3xl font-black mb-1" style={{ color: '#1C1C1C' }}>Sign in</h2>
-          <p className="text-gray-500 text-sm mb-8">Access your accounting dashboard</p>
+          <p className="text-gray-500 text-sm mb-8">
+            New here?{' '}
+            <Link to="/signup" className="font-bold transition" style={{ color: '#CC0000' }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.75'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+              Create a free account
+            </Link>
+          </p>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -232,11 +239,20 @@ export default function Login() {
             <div className="flex-1 h-px bg-gray-200" />
           </div>
 
-          {/* Help */}
+          {/* Sign up CTA */}
           <div className="rounded-xl p-4 text-center" style={{ background: '#1C1C1C' }}>
-            <p className="text-gray-400 text-xs leading-relaxed">
-              Don't have access? Contact your system administrator to set up your account.
+            <p className="text-gray-400 text-xs leading-relaxed mb-2">
+              Setting up for the first time?
             </p>
+            <Link
+              to="/signup"
+              className="text-xs font-bold transition"
+              style={{ color: '#CC0000' }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.75'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              Create your organisation →
+            </Link>
           </div>
         </div>
       </div>

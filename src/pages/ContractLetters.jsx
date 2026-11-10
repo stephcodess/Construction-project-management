@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useOrgId } from '../lib/useOrgId'
 import { Upload, FileText, Download, Trash2, X } from 'lucide-react'
 import { format } from 'date-fns'
 
 export default function ContractLetters() {
+  const orgId = useOrgId()
   const { profile } = useAuth()
   const [letters, setLetters] = useState([])
   const [projects, setProjects] = useState([])
@@ -38,6 +40,7 @@ export default function ContractLetters() {
     await supabase.from('contract_letters').insert([{
       project_id: form.project_id || null, notes: form.notes,
       file_name: file.name, file_path: path, file_url: publicUrl, file_size: file.size,
+      organisation_id: orgId,
     }])
     setUploading(false); setFile(null); setForm({ project_id: '', notes: '' })
     setShowModal(false)

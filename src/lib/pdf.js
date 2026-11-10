@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { format } from 'date-fns'
+import { format, differenceInDays } from 'date-fns'
 
 // ── Brand ──────────────────────────────────────────────────────
 const RED   = [204, 0, 0]
@@ -10,6 +10,18 @@ const LIGHT = [245, 245, 245]
 const WHITE = [255, 255, 255]
 const LINE  = [230, 230, 230]
 const LGRAY = [220, 220, 220]
+
+// ── Money formatter — jsPDF helvetica can't render ₦, use N ───
+function N(amount, compact = false) {
+  const v = Number(amount) || 0
+  if (compact) {
+    if (Math.abs(v) >= 1_000_000_000) return `N${(v / 1_000_000_000).toFixed(1)}B`
+    if (Math.abs(v) >= 1_000_000)     return `N${(v / 1_000_000).toFixed(1)}M`
+    if (Math.abs(v) >= 1_000)         return `N${(v / 1_000).toFixed(1)}K`
+    return `N${v.toFixed(0)}`
+  }
+  return `N${v.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 
 // ── Load logo as base64 data URL ───────────────────────────────
 async function loadLogoBase64(url = '/unnamed.jpg') {
@@ -311,6 +323,21 @@ function sectionLabel(doc, y, text) {
   doc.setTextColor(...DARK)
   doc.text(text, 20, y + 4)
   return y + 10
+}
+
+// ── Ensure enough space remains before starting a section ──────
+// minRows: minimum data rows that must fit (header + N rows + footer) before forcing a new page
+// rowH: estimated row height in mm (default 10)
+function ensureSpace(doc, currentY, pageH, minRows = 4, rowH = 10, logoData, docTitle, pageW, co) {
+  const footerH    = 24   // footer reserve
+  const headerH    = 10   // section label height
+  const tableHeadH = 10   // table header row
+  const needed     = headerH + tableHeadH + minRows * rowH + footerH
+  if (currentY + needed > pageH) {
+    doc.addPage()
+    return drawCompactHeader(doc, logoData, docTitle, pageW, co) + 4
+  }
+  return currentY
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -809,6 +836,419 @@ export async function exportInvoicePDF(invoice, company) {
   addContinuationHeaders(doc, logo, `Invoice ${invNo}`, pageW, co)
   addFooters(doc, pageW, pageH, co)
   doc.save(`invoice-${invNo}.pdf`)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROJECT SUMMARY PDF  (comprehensive full-project export)
+// ═══════════════════════════════════════════════════════════════
+export async function exportProjectSummaryPDF(project, journal, invoices, documents, milestones, company) {
+  const co    = resolveCompany(company)
+  const doc   = new jsPDF({ orientation: 'landscape' })
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+  const logo  = await loadLogoBase64(co.logo_url)
+  const docTitle = 'Project Summary'
+
+  // ── Derived values ────────────────────────────────────────────
+  const receipts       = (journal ?? []).filter(e => e.type === 'receipt')
+  const payments       = (journal ?? []).filter(e => e.type === 'payment')
+  const totalInflow    = receipts.reduce((s, e) => s + Number(e.amount), 0)
+  const totalOutflow   = payments.reduce((s, e) => s + Number(e.amount), 0)
+  const netCash        = totalInflow - totalOutflow
+  const totalBilled    = (invoices ?? []).reduce((s, i) => s + Number(i.total_amount), 0)
+  const totalCollected = (invoices ?? []).reduce((s, i) => s + Number(i.amount_paid),  0)
+  const totalOutstanding = totalBilled - totalCollected
+  const actRevenue  = Number(project?.actual_revenue    ?? 0)
+  const estRevenue  = Number(project?.estimated_revenue ?? 0)
+  const actCost     = Number(project?.actual_cost       ?? 0)
+  const estCost     = Number(project?.estimated_cost    ?? 0)
+  const contractVal = Number(project?.contract_value    ?? 0)
+  const grossProfit = actRevenue - actCost
+  const margin      = actRevenue > 0 ? (grossProfit / actRevenue) * 100 : 0
+  const completedMs = (milestones ?? []).filter(m => m.status === 'completed').length
+  const totalMs     = (milestones ?? []).length
+
+  const paymentsByCat = Object.entries(
+    payments.reduce((acc, e) => { const k = e.category || 'Uncategorised'; acc[k] = (acc[k] ?? 0) + Number(e.amount); return acc }, {})
+  ).sort((a, b) => b[1] - a[1])
+
+  const receiptsByCat = Object.entries(
+    receipts.reduce((acc, e) => { const k = e.category || 'Uncategorised'; acc[k] = (acc[k] ?? 0) + Number(e.amount); return acc }, {})
+  ).sort((a, b) => b[1] - a[1])
+
+  // ── Page 1 letterhead ─────────────────────────────────────────
+  const contentY = drawLetterhead(doc, logo, docTitle,
+    `${project.name}${project.client ? '  |  ' + project.client : ''}`,
+    [
+      { label: 'Project',        value: project.name },
+      { label: 'Client',         value: project.client || '—' },
+      { label: 'Status',         value: (project.status ?? '—').toUpperCase() },
+      { label: 'Contract Value', value: N(contractVal) },
+      { label: 'Gross Profit',   value: N(grossProfit) },
+      { label: 'Net Margin',     value: `${margin.toFixed(1)}%` },
+    ], pageW, pageH, co)
+
+  // ── Section 1: KPI grid — 2 rows × 6 cols ────────────────────
+  let y = sectionLabel(doc, contentY, 'Key Performance Indicators')
+
+  const kpiRows = [
+    [
+      { label: 'Contract Sum',       value: N(contractVal, true),         bg: DARK,            fg: WHITE },
+      { label: 'Budgeted Revenue',   value: N(estRevenue, true),          bg: LIGHT,           fg: DARK  },
+      { label: 'Recognised Revenue', value: N(actRevenue, true),          bg: LIGHT,           fg: DARK  },
+      { label: 'Budgeted Cost',      value: N(estCost, true),             bg: LIGHT,           fg: DARK  },
+      { label: 'Cost to Date',       value: N(actCost, true),             bg: LIGHT,           fg: DARK  },
+      { label: 'Invoices Raised',    value: `${(invoices ?? []).length}`, bg: LIGHT,           fg: DARK  },
+    ],
+    [
+      { label: 'Gross Profit',       value: N(grossProfit, true),         bg: grossProfit >= 0 ? [22, 163, 74] : RED, fg: WHITE },
+      { label: 'Net Margin %',       value: `${margin.toFixed(1)}%`,      bg: LIGHT,           fg: DARK  },
+      { label: 'Total Billed',       value: N(totalBilled, true),         bg: LIGHT,           fg: DARK  },
+      { label: 'Total Collected',    value: N(totalCollected, true),      bg: LIGHT,           fg: DARK  },
+      { label: 'Outstanding',        value: N(totalOutstanding, true),    bg: totalOutstanding > 0 ? [254, 243, 199] : LIGHT, fg: DARK },
+      { label: 'Milestones',         value: `${completedMs} / ${totalMs}`, bg: LIGHT,          fg: DARK  },
+    ],
+  ]
+
+  const cols    = 6
+  const gutter  = 3
+  const boxW    = (pageW - 28 - (cols - 1) * gutter) / cols
+  const boxH    = 24
+
+  kpiRows.forEach((row, ri) => {
+    const rowY = y + ri * (boxH + gutter)
+    row.forEach((kpi, ci) => {
+      const bx = 14 + ci * (boxW + gutter)
+      doc.setFillColor(...kpi.bg)
+      doc.roundedRect(bx, rowY, boxW, boxH, 2, 2, 'F')
+
+      // Label
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...(kpi.fg === WHITE ? [180, 180, 180] : GRAY))
+      doc.text(kpi.label.toUpperCase(), bx + 5, rowY + 7)
+
+      // Value
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(...kpi.fg)
+      doc.text(kpi.value, bx + 5, rowY + 18)
+    })
+  })
+
+  y += kpiRows.length * (boxH + gutter) + 6
+
+  // ── Section 2: Financial Analysis (2-col layout) ──────────────
+  y = ensureSpace(doc, y, pageH, 5, 10, logo, docTitle, pageW, co)
+  y = sectionLabel(doc, y, 'Financial Performance')
+
+  // margin-based side-by-side: left table uses right margin = pageW/2+gap, right table uses left margin = pageW/2+gap
+  const midX   = pageW / 2
+  const colGap = 4
+
+  const tblStyles = (headBg = DARK) => ({
+    styles: { fontSize: 8.5, cellPadding: { top: 4, bottom: 4, left: 5, right: 5 }, textColor: DARK, lineColor: LINE, lineWidth: 0.2 },
+    headStyles: { fillColor: headBg, textColor: WHITE, fontStyle: 'bold', fontSize: 8, cellPadding: { top: 5, bottom: 5, left: 5, right: 5 } },
+    alternateRowStyles: { fillColor: [250, 250, 250] },
+    tableLineColor: LINE,
+    tableLineWidth: 0.2,
+    margin: { top: 24, bottom: 24 },
+  })
+
+  // Left — P&L comparison
+  autoTable(doc, {
+    startY: y,
+    head: [['', 'Budget', 'Actual', 'Variance']],
+    body: [
+      ['Revenue',
+        N(estRevenue), N(actRevenue),
+        { content: N(actRevenue - estRevenue), styles: { textColor: actRevenue >= estRevenue ? [22, 163, 74] : RED, fontStyle: 'bold' } }],
+      ['Cost',
+        N(estCost), N(actCost),
+        { content: N(actCost - estCost), styles: { textColor: actCost <= estCost ? [22, 163, 74] : RED, fontStyle: 'bold' } }],
+      ['Gross Profit',
+        { content: N(estRevenue - estCost), styles: { fontStyle: 'bold' } },
+        { content: N(grossProfit), styles: { fontStyle: 'bold' } },
+        { content: N(grossProfit - (estRevenue - estCost)), styles: { textColor: grossProfit >= (estRevenue - estCost) ? [22, 163, 74] : RED, fontStyle: 'bold' } }],
+    ],
+    margin: { left: 14, right: midX + colGap, top: 24, bottom: 24 },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 28 },
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+    },
+    ...tblStyles(),
+  })
+
+  // Right — billing summary (same startY, starts at midX)
+  autoTable(doc, {
+    startY: y,
+    head: [['Billing & Cash Flow', 'Amount']],
+    body: [
+      ['Total Billed',         N(totalBilled)],
+      ['Total Collected',      { content: N(totalCollected),   styles: { textColor: [22, 163, 74], fontStyle: 'bold' } }],
+      ['Outstanding Balance',  { content: N(totalOutstanding), styles: { textColor: totalOutstanding > 0 ? RED : DARK, fontStyle: 'bold' } }],
+      ['Cash Inflow',          N(totalInflow)],
+      ['Cash Outflow',         N(totalOutflow)],
+      ['Net Cash Flow',        { content: N(netCash), styles: { textColor: netCash >= 0 ? [22, 163, 74] : RED, fontStyle: 'bold' } }],
+    ],
+    margin: { left: midX + colGap, right: 14, top: 24, bottom: 24 },
+    columnStyles: {
+      0: { fontStyle: 'bold' },
+      1: { halign: 'right' },
+    },
+    ...tblStyles([50, 50, 50]),
+  })
+
+  const afterFinancial = Math.max(doc.lastAutoTable.finalY, y + 50)
+
+  // ── Section 3: Category breakdown (side by side) ──────────────
+  if (paymentsByCat.length > 0 || receiptsByCat.length > 0) {
+    const catY = ensureSpace(doc, afterFinancial + 6, pageH, 4, 10, logo, docTitle, pageW, co)
+    y = sectionLabel(doc, catY, 'Spend & Income by Category')
+
+    if (paymentsByCat.length > 0) {
+      autoTable(doc, {
+        startY: y,
+        head: [['Expense Category', 'Amount', '%']],
+        body: paymentsByCat.map(([cat, val]) => [
+          cat,
+          N(val),
+          totalOutflow > 0 ? `${((val / totalOutflow) * 100).toFixed(1)}%` : '0%',
+        ]),
+        foot: [['TOTAL OUTFLOW', N(totalOutflow), '100%']],
+        footStyles: { fillColor: RED, textColor: WHITE, fontStyle: 'bold' },
+        margin: { left: 14, right: midX + colGap, top: 24, bottom: 24 },
+        columnStyles: { 1: { halign: 'right', fontStyle: 'bold' }, 2: { halign: 'center', cellWidth: 20 } },
+        ...tblStyles(),
+      })
+    }
+
+    if (receiptsByCat.length > 0) {
+      autoTable(doc, {
+        startY: y,
+        head: [['Income Category', 'Amount', '%']],
+        body: receiptsByCat.map(([cat, val]) => [
+          cat,
+          N(val),
+          totalInflow > 0 ? `${((val / totalInflow) * 100).toFixed(1)}%` : '0%',
+        ]),
+        foot: [['TOTAL INFLOW', N(totalInflow), '100%']],
+        footStyles: { fillColor: [22, 163, 74], textColor: WHITE, fontStyle: 'bold' },
+        margin: { left: midX + colGap, right: 14, top: 24, bottom: 24 },
+        columnStyles: { 1: { halign: 'right', fontStyle: 'bold' }, 2: { halign: 'center', cellWidth: 20 } },
+        ...tblStyles(),
+      })
+    }
+  }
+
+  // ── Section 4: Cash Flow Journal entries ─────────────────────
+  if ((journal ?? []).length > 0) {
+    const jY = ensureSpace(doc, doc.lastAutoTable.finalY + 10, pageH, 4, 10, logo, docTitle, pageW, co)
+    y = sectionLabel(doc, jY, 'Cash Flow Journal')
+    autoTable(doc, {
+      startY: y,
+      head: [['Date', 'Type', 'Description', 'Category', 'VAT', 'Amount']],
+      body: journal.map(e => [
+        e.date ? format(new Date(e.date), 'dd/MM/yyyy') : '—',
+        e.type === 'receipt' ? 'Receipt' : 'Payment',
+        e.description ?? '',
+        e.category ?? '',
+        e.vat_applicable ? N(e.vat_amount) : '—',
+        N(e.amount),
+      ]),
+      foot: [['', '', '', '', 'Net Cash Flow', N(netCash)]],
+      footStyles: { fillColor: netCash >= 0 ? [22, 163, 74] : RED, textColor: WHITE, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 22 },
+        4: { halign: 'right', cellWidth: 28 },
+        5: { halign: 'right', fontStyle: 'bold', cellWidth: 36 },
+      },
+      didParseCell(data) {
+        if (data.section === 'body' && data.column.index === 1) {
+          data.cell.styles.textColor = data.cell.raw === 'Receipt' ? [22, 163, 74] : RED
+          data.cell.styles.fontStyle = 'bold'
+        }
+      },
+      ...tableStyle(),
+    })
+  }
+
+  // ── Section 5: Invoices ───────────────────────────────────────
+  if ((invoices ?? []).length > 0) {
+    const invY = ensureSpace(doc, doc.lastAutoTable.finalY + 10, pageH, 4, 10, logo, docTitle, pageW, co)
+    y = sectionLabel(doc, invY, 'Invoice Register')
+    autoTable(doc, {
+      startY: y,
+      head: [['Invoice No.', 'Issue Date', 'Due Date', 'Client', 'Total Amount', 'Amount Paid', 'Outstanding', 'Status']],
+      body: invoices.map(inv => {
+        const total = Number(inv.total_amount) || 0
+        const paid  = Number(inv.amount_paid)  || 0
+        return [
+          inv.invoice_number || '—',
+          inv.invoice_date ? format(new Date(inv.invoice_date), 'dd MMM yyyy') : '—',
+          inv.due_date ? format(new Date(inv.due_date), 'dd MMM yyyy') : '—',
+          inv.client_name || '—',
+          N(total),
+          N(paid),
+          N(total - paid),
+          (inv.status ?? 'draft').toUpperCase(),
+        ]
+      }),
+      foot: [['', '', '', 'TOTALS', N(totalBilled), N(totalCollected), N(totalOutstanding), '']],
+      footStyles: { fillColor: DARK, textColor: WHITE, fontStyle: 'bold' },
+      columnStyles: {
+        4: { halign: 'right' },
+        5: { halign: 'right', textColor: [22, 163, 74] },
+        6: { halign: 'right' },
+        7: { halign: 'center', fontStyle: 'bold', cellWidth: 22 },
+      },
+      didParseCell(data) {
+        if (data.section === 'body' && data.column.index === 7) {
+          const v = (data.cell.raw ?? '').toLowerCase()
+          data.cell.styles.textColor =
+            v === 'paid'    ? [22, 163, 74] :
+            v === 'overdue' ? RED :
+            v === 'partial' ? [161, 98, 7] : GRAY
+          data.cell.styles.fontStyle = 'bold'
+        }
+        if (data.section === 'body' && data.column.index === 6) {
+          const val = parseFloat(String(data.cell.raw).replace(/[^0-9.-]/g, ''))
+          if (!isNaN(val) && val > 0) data.cell.styles.textColor = RED
+        }
+      },
+      ...tableStyle(),
+    })
+  }
+
+  // ── Section 6: Milestones ─────────────────────────────────────
+  if ((milestones ?? []).length > 0) {
+    const msY = ensureSpace(doc, doc.lastAutoTable.finalY + 10, pageH, 4, 10, logo, docTitle, pageW, co)
+    y = sectionLabel(doc, msY, 'Project Milestones')
+    autoTable(doc, {
+      startY: y,
+      head: [['Milestone', 'Phase', 'Expected', 'Actual', 'Status', 'Variance']],
+      body: milestones.map(m => {
+        let varianceLabel = '—'
+        if (m.actual_date && m.expected_date) {
+          const diff = differenceInDays(new Date(m.actual_date), new Date(m.expected_date))
+          varianceLabel = diff === 0 ? 'On time' : diff > 0 ? `${diff}d late` : `${Math.abs(diff)}d early`
+        } else if (m.expected_date && m.status !== 'completed') {
+          const daysLeft = differenceInDays(new Date(m.expected_date), new Date())
+          varianceLabel = daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`
+        }
+        return [
+          m.name ?? '—',
+          m.phase ?? '—',
+          m.expected_date ? format(new Date(m.expected_date), 'dd MMM yyyy') : '—',
+          m.actual_date   ? format(new Date(m.actual_date),   'dd MMM yyyy') : '—',
+          (m.status ?? 'pending').replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          varianceLabel,
+        ]
+      }),
+      foot: [['', '', '', '', `${completedMs} of ${totalMs} Completed`, '']],
+      footStyles: { fillColor: DARK, textColor: WHITE, fontStyle: 'bold' },
+      columnStyles: {
+        0: { fontStyle: 'bold' },
+        2: { cellWidth: 30, halign: 'center' },
+        3: { cellWidth: 30, halign: 'center' },
+        4: { cellWidth: 32, halign: 'center', fontStyle: 'bold' },
+        5: { cellWidth: 28, halign: 'center' },
+      },
+      didParseCell(data) {
+        if (data.section === 'body' && data.column.index === 4) {
+          const v = data.cell.raw
+          data.cell.styles.textColor =
+            v === 'Completed'   ? [22, 163, 74] :
+            v === 'Delayed'     ? RED :
+            v === 'In Progress' ? [29, 78, 216] : GRAY
+        }
+        if (data.section === 'body' && data.column.index === 5) {
+          const v = data.cell.raw
+          if (v && (v.includes('late') || v.includes('overdue'))) data.cell.styles.textColor = RED
+          else if (v && (v.includes('early') || v === 'On time' || v.includes('left'))) data.cell.styles.textColor = [22, 163, 74]
+        }
+      },
+      ...tableStyle(),
+    })
+  }
+
+  // ── Section 7: Project Details + Documents side-by-side ──────
+  const rawPrevY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : y + 10
+  const prevY = ensureSpace(doc, rawPrevY, pageH, 6, 9, logo, docTitle, pageW, co)
+  y = sectionLabel(doc, prevY, 'Project Details')
+
+  const details = [
+    ['Project Name',    project.name            ?? '—'],
+    ['Project No.',     project.project_number  ? `#${project.project_number}` : '—'],
+    ['Client',          project.client          ?? '—'],
+    ['Status',          (project.status ?? '—').replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())],
+    ['Manager',         project.project_manager ?? '—'],
+    ['Location',        project.location        ?? '—'],
+    ['Contract Value',  N(contractVal)],
+    ['Start Date',      project.start_date  ? format(new Date(project.start_date),  'dd MMM yyyy') : '—'],
+    ['End Date',        project.end_date    ? format(new Date(project.end_date),    'dd MMM yyyy') : '—'],
+  ]
+
+  autoTable(doc, {
+    startY: y,
+    body: details,
+    margin: { left: 14, right: midX + colGap, top: 24, bottom: 24 },
+    styles: { fontSize: 8.5, cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 5 }, textColor: DARK, lineColor: LINE, lineWidth: 0.2 },
+    alternateRowStyles: { fillColor: [250, 250, 250] },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 36, textColor: GRAY },
+      1: { fontStyle: 'normal' },
+    },
+  })
+
+  if ((documents ?? []).length > 0) {
+    autoTable(doc, {
+      startY: y,
+      head: [['Documents', 'Type', 'Size', 'Uploaded']],
+      body: documents.map(d => [
+        d.file_name || d.name || '—',
+        (d.file_type || d.type || '—').toUpperCase(),
+        d.file_size ? `${(d.file_size / 1024).toFixed(0)} KB` : '—',
+        d.created_at ? format(new Date(d.created_at), 'dd MMM yyyy') : '—',
+      ]),
+      margin: { left: midX + colGap, right: 14, top: 24, bottom: 24 },
+      styles: { fontSize: 8.5, cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 5 }, textColor: DARK, lineColor: LINE, lineWidth: 0.2 },
+      headStyles: { fillColor: DARK, textColor: WHITE, fontStyle: 'bold', fontSize: 8, cellPadding: { top: 5, bottom: 5, left: 5, right: 5 } },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      columnStyles: {
+        0: { fontStyle: 'bold' },
+        1: { halign: 'center', cellWidth: 22 },
+        2: { halign: 'right',  cellWidth: 20 },
+        3: { halign: 'center', cellWidth: 28 },
+      },
+    })
+  }
+
+  // ── Notes if present ──────────────────────────────────────────
+  if (project.notes) {
+    const noteY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 8 : y + 10
+    if (noteY < pageH - 40) {
+      doc.setFillColor(248, 248, 252)
+      doc.roundedRect(14, noteY, pageW - 28, 16, 2, 2, 'F')
+      doc.setFillColor(...RED)
+      doc.roundedRect(14, noteY, 4, 16, 2, 2, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...DARK)
+      doc.text('Notes:', 22, noteY + 6)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...GRAY)
+      doc.text(String(project.notes).slice(0, 300), 48, noteY + 6, { maxWidth: pageW - 65 })
+    }
+  }
+
+  addContinuationHeaders(doc, logo, docTitle, pageW, co)
+  addFooters(doc, pageW, pageH, co)
+  doc.save(`project-summary-${project.project_number || project.id}.pdf`)
 }
 
 // ═══════════════════════════════════════════════════════════════

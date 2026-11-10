@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useProject } from '../context/ProjectContext'
+import { useOrgId } from '../lib/useOrgId'
 import { logActivity } from '../lib/activity'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import {
@@ -142,6 +143,7 @@ function TypeBadge({ type }) {
 
 // ── Add / Edit Modal ──────────────────────────────────────────
 function ExpenseModal({ expense, projects, defaultProjectId, onClose, onSaved }) {
+  const orgId = useOrgId()
   const isEdit = !!expense
 
   const [categories, addCategory] = useExtendableList('expense_categories', DEFAULT_CATEGORIES)
@@ -195,6 +197,7 @@ function ExpenseModal({ expense, projects, defaultProjectId, onClose, onSaved })
       status:           form.status,
       category:         form.category,
       notes:            form.notes.trim() || null,
+      organisation_id:  orgId,
     }
 
     let err

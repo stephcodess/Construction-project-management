@@ -4,6 +4,8 @@ import { ProjectProvider } from './context/ProjectContext'
 import { CompanyProvider } from './context/CompanyContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import Signup from './pages/Signup'
+import AcceptInvite from './pages/AcceptInvite'
 import Dashboard from './pages/Dashboard'
 import Projects from './pages/Projects'
 import Journal from './pages/Journal'
@@ -34,6 +36,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login"     element={user ? <Navigate to="/projects" replace /> : <Login />} />
+      <Route path="/signup"    element={user ? <Navigate to="/projects" replace /> : <Signup />} />
+      <Route path="/invite/:token" element={<AcceptInvite />} />
       <Route path="/"          element={<Navigate to="/projects" replace />} />
       <Route path="/overview"  element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/projects"  element={<ProtectedRoute><Projects /></ProtectedRoute>} />

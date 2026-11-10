@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useOrgId } from '../lib/useOrgId'
 import { computePAYE, computeWHT } from '../lib/taxRules'
 import { exportPayrollPDF } from '../lib/pdf'
 import { format } from 'date-fns'
 import { Plus, Download, CheckCircle2, X } from 'lucide-react'
 
 export default function Payroll() {
+  const orgId = useOrgId()
   const { profile } = useAuth()
   const [entries, setEntries] = useState([])
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
@@ -61,6 +63,7 @@ export default function Payroll() {
       period_start: `${month}-01`,
       project_id: form.project_id || null,
       remitted: false,
+      organisation_id: orgId,
     }])
     setSaving(false); setShowForm(false)
     setForm({ name: '', type: 'staff', gross_amount: '', entity_type: 'individual', project_id: '' })

@@ -3,6 +3,7 @@ import Pagination, { usePagination } from '../components/Pagination'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useProject } from '../context/ProjectContext'
+import { useOrgId } from '../lib/useOrgId'
 import { computePAYE, computeWHT } from '../lib/taxRules'
 import { exportVATPDF } from '../lib/pdf'
 import { exportPayrollPDF } from '../lib/pdf'
@@ -38,6 +39,7 @@ function SS({ children, ...props }) {
 // VAT TAB
 // ════════════════════════════════════════════════════════════════
 function VATTab() {
+  const orgId = useOrgId()
   const { activeProject } = useProject()
   const [entries, setEntries] = useState([])
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
@@ -74,7 +76,8 @@ function VATTab() {
     await supabase.from('vat_returns').upsert([{
       period: month, output_vat: outputVAT, input_vat: inputVAT,
       net_vat: netVAT, status: 'filed', filed_at: new Date().toISOString(),
-    }], { onConflict: 'period' })
+      organisation_id: orgId,
+    }], { onConflict: 'organisation_id,period' })
     loadData()
   }
 
@@ -238,6 +241,7 @@ function VATTab() {
 // PAYROLL TAB
 // ════════════════════════════════════════════════════════════════
 function PayrollTab() {
+  const orgId = useOrgId()
   const { profile } = useAuth()
   const { activeProject } = useProject()
   const [entries, setEntries] = useState([])
@@ -299,6 +303,7 @@ function PayrollTab() {
       period_start: `${month}-01`,
       project_id: form.project_id || null,
       remitted: false,
+      organisation_id: orgId,
     }])
     setSaving(false); setShowModal(false)
     setForm({ name: '', type: 'staff', gross_amount: '', entity_type: 'individual', project_id: '' })
@@ -660,6 +665,7 @@ function ComplianceTab() {
 //   claimed_at timestamptz, created_at timestamptz DEFAULT now()
 // );
 function WHTTab() {
+  const orgId = useOrgId()
   const [subTab, setSubTab] = useState('Deductions Made')
 
   // ── Deductions Made state ──────────────────────────────────────
@@ -727,6 +733,7 @@ function WHTTab() {
       project_id: certForm.project_id || null,
       notes: certForm.notes || null,
       claimed: false,
+      organisation_id: orgId,
     }])
     setSavingCert(false)
     setShowCertModal(false)

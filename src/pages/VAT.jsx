@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useOrgId } from '../lib/useOrgId'
 import { exportVATPDF } from '../lib/pdf'
 import { format, endOfMonth } from 'date-fns'
 import { Download, Receipt, CheckCircle2 } from 'lucide-react'
 
 export default function VAT() {
+  const orgId = useOrgId()
   const [entries, setEntries] = useState([])
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [vatReturns, setVatReturns] = useState([])
@@ -32,7 +34,8 @@ export default function VAT() {
     await supabase.from('vat_returns').upsert([{
       period: month, output_vat: outputVAT, input_vat: inputVAT,
       net_vat: netVAT, status: 'filed', filed_at: new Date().toISOString(),
-    }], { onConflict: 'period' })
+      organisation_id: orgId,
+    }], { onConflict: 'organisation_id,period' })
     loadData()
   }
 

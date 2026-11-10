@@ -3,7 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useProject } from '../context/ProjectContext'
 import { useCompany } from '../context/CompanyContext'
-import { exportProjectPLPDF, exportInvoicePDF } from '../lib/pdf'
+import { useOrgId } from '../lib/useOrgId'
+import { exportProjectSummaryPDF, exportInvoicePDF } from '../lib/pdf'
 import { logActivity } from '../lib/activity'
 import {
   ArrowLeft, TrendingUp, TrendingDown, FileText, FilePlus,
@@ -361,6 +362,7 @@ function MilestonesSection({ milestones, projectId, onAdd, onEdit, onDelete }) {
 
 // ─── Milestone Modal ─────────────────────────────────────────────────────────
 function MilestoneModal({ projectId, milestone, onClose, onSaved }) {
+  const orgId = useOrgId()
   const isEdit = !!milestone
   const EMPTY = {
     name: '', phase: '', expected_date: '', actual_date: '',
@@ -389,14 +391,15 @@ function MilestoneModal({ projectId, milestone, onClose, onSaved }) {
     setSaving(true)
     setError('')
     const payload = {
-      project_id:    projectId,
-      name:          form.name.trim(),
-      phase:         form.phase || null,
-      expected_date: form.expected_date,
-      actual_date:   form.actual_date || null,
-      status:        form.status,
-      description:   form.description.trim() || null,
-      sort_order:    Number(form.sort_order) || 0,
+      project_id:      projectId,
+      name:            form.name.trim(),
+      phase:           form.phase || null,
+      expected_date:   form.expected_date,
+      actual_date:     form.actual_date || null,
+      status:          form.status,
+      description:     form.description.trim() || null,
+      sort_order:      Number(form.sort_order) || 0,
+      organisation_id: orgId,
     }
     let err
     if (isEdit) {
@@ -854,13 +857,13 @@ export default function ProjectSummary() {
             <FilePlus className="w-3.5 h-3.5" /> Invoices
           </button>
           <button
-            onClick={() => exportProjectPLPDF(project, journal, company)}
+            onClick={() => exportProjectSummaryPDF(project, journal, invoices, documents, milestones, company)}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white transition-opacity"
             style={{ background: RED }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
             onMouseLeave={e => e.currentTarget.style.opacity = '1'}
           >
-            <Download className="w-3.5 h-3.5" /> P&L Report
+            <Download className="w-3.5 h-3.5" /> Export PDF
           </button>
         </div>
       </div>
